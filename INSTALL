@@ -1,0 +1,8 @@
+Installing this requires the R package devtools. Install devtools from cran.
+Next (after cloning this repository) start R and set the working directory to
+the root folder of this repository and then run the following commands:
+
+> library(devtools)
+> install()
+
+If everything works, load the package with library(hdps) and you're all set.
