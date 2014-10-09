@@ -1,0 +1,9 @@
+This is an (actively developing) implementation of the High Dimensional
+Propensity score algorithm in the R language. It is part of the OHDSI project
+(see ohdsi.org and the OHDSI/* github repositories) and depends upon much of
+the code which has been writtn by that team.
+
+As of the writing of this README, the majority of this repository's code is
+simply a subset of the code written by OHDSI (especially by Patrick Ryan,
+Martijn Schuemie, and Marc Suchard). All originality is theirs and all mistakes
+are mine.
