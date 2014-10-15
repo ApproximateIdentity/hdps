@@ -66,7 +66,7 @@ Hdps.extractCovariates <- function(cutoff = 100) {
     # Create prevalence table.
     query = "
     CREATE TABLE #prevalence (
-        concept_id int,
+        concept_id bigint,
         count int
     );
 
@@ -95,7 +95,7 @@ Hdps.extractCovariates <- function(cutoff = 100) {
     # Get prevalent ids.
     query = "
     CREATE TABLE #prevalent_ids (
-        concept_id int
+        concept_id bigint
     )
     ;
 
