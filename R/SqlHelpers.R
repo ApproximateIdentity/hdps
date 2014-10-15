@@ -5,3 +5,10 @@ loadSql <- function(filename) {
     parameterizedSql <- readChar(filepath, file.info(filepath)$size)  
     return(parameterizedSql)
 }
+
+
+#' @export
+loadLocalSql <- function(filename) {
+    parameterizedSql <- readChar(filepath, file.info(filepath)$size)
+    return(parameterizedSql)
+}

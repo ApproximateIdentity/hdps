@@ -2,7 +2,7 @@
 # later.
 DatabaseConnector.connect <- connect
 
-Connection.connect <- function() {
+Connection.connect <- function(dbms, user, password, server, port, schema) {
     conn <<- DatabaseConnector.connect(
         dbms=dbms,
         user,
@@ -22,14 +22,25 @@ Connection.disconnect <- function() {
 
 Connection.execute <- function(renderedSql) {
     translatedSql <- translateSql(renderedSql, "sql server", dbms)$sql
-    executeSql(conn, translatedSql)
+    if (debug) {
+        logger$log(translatedSql)
+        print("debug mode")
+    } else {
+        executeSql(conn, translatedSql)
+    }
 }
 
 
 Connection.executeforresult <- function(renderedSql) {
     translatedSql <- translateSql(renderedSql, "sql server", dbms)$sql
-    result <<- dbSendQuery(conn, translatedSql)
-    dbFetch(result)
+    if (debug) {
+        logger$log(translatedSql)
+        print("debug mode")
+        return(NULL)
+    } else {
+        result <<- dbSendQuery(conn, translatedSql)
+        return(dbFetch(result))
+    }
 }
 
 
@@ -37,23 +48,23 @@ Connection.executeforresult <- function(renderedSql) {
 Connection <- setRefClass(
     "Connection",
     fields=list(
-        password = "character",
-        dbms = "character",
-        user = "character",
-        server = "character",
-        # Should cdmSchema be here?
-        schema = "character",
-        port = "character",
-        connected = "logical",
+        schema = "ANY",
+        connected = "ANY",
         conn = "ANY",
-        result = "ANY"
+        result = "ANY",
+        logger = "ANY",
+        debug = "ANY"
     ),
     prototype=list(
-        connected = FALSE
+        connected = FALSE,
+        debug = FALSE
     ),
     methods=list(
         initialize = function(...) {
-          callSuper(...)
+            callSuper(...)
+            connected <<- FALSE
+            debug <<- FALSE
+            logger <<- Logger$new(filepath="/tmp/sqlqueries.log")
         },
         connect = Connection.connect,
         disconnect = Connection.disconnect,

@@ -6,14 +6,15 @@ Hdps.connect <- function(
     port,
     schema) {
 
-    connection <<- Connection$new(
-        password=password,
-        dbms=dbms,
-        user=user,
-        server=server,
-        schema=schema,
-        port=port)
-    connection$connect()
+    connection$connect(
+        dbms,
+        user,
+        password,
+        server,
+        port,
+        schema)
+
+    connection$schema <<- schema
 }
 
 
@@ -54,11 +55,153 @@ Hdps.buildCohorts <- function(
 }
 
 
+Hdps.buildDimension <- function(parametrizedSql, ...) {
+    renderedSql <- renderSql(sql = parametrizedSql, ...)
+    connection$execute(renderedSql$sql)
+}
+
+
+# TODO: This function probably should be split up into separate pieces.
+Hdps.extractCovariates <- function(cutoff = 100) {
+    # Create prevalence table.
+    query = "
+    CREATE TABLE #prevalence (
+        concept_id int,
+        count int
+    );
+
+    INSERT INTO #prevalence
+    SELECT
+        concept_id,
+        COUNT(DISTINCT(person_id))
+    FROM
+        #dim
+    GROUP BY
+        concept_id
+    ;
+    "
+    connection$execute(query)
+
+    # TODO: This should probably be an attribute of the class.
+    # Get cohort size.
+    query = "
+    SELECT COUNT(DISTINCT(person_id))
+    FROM cohort_person
+    ;
+    "
+    result = connection$executeforresult(query)
+    numpersons = result$count
+
+    # Get prevalent ids.
+    query = "
+    CREATE TABLE #prevalent_ids (
+        concept_id int
+    )
+    ;
+
+    INSERT INTO prevalent_ids
+    SELECT
+        concept_id
+    FROM prevalence
+    ORDER BY @(count/2 - %s)
+    LIMIT %s
+    ;
+    "
+    query = sprintf(query, numpersons, cutoff)
+    connection$execute(query)
+
+
+    # Finally download the data and work locally from now on.
+    query = "
+    SELECT
+        d.person_id,
+        d.concept_id,
+        d.count
+    FROM
+        #dim d INNER JOIN #prevalent_ids p
+            ON d.concept_id = p.concept_id
+    ;
+    "
+    pre_covariates = connection$executeforresult(query)
+
+
+    # Clean out temp tables.
+    query = "
+    TRUNCATE TABLE #dim;
+    DROP TABLE #dim;
+
+    TRUNCATE TABLE #prevalence;
+    DROP TABLE #prevalence;
+
+    TRUNCATE TABLE #prevalent_ids;
+    DROP TABLE #prevalent_ids;
+    ;
+    "
+    connection$execute(query)
+
+    # Now build the covariates locally.
+    pre_covariates <- data.table(pre_covariates)
+
+    # Get 75% percentiles.
+    f <- function(numbers) {
+        return(quantile(numbers)[[4]])
+    }
+    highvals <- pre_covariates[, f(count), by = concept_id]
+    highmap <- highvals$V1
+    names(highmap) <- highvals$concept_id
+
+    # Get medians.
+    f <- function(numbers) {
+        return(quantile(numbers)[[3]])
+    }
+    midvals <- pre_covariates[, f(count), by = concept_id]
+    midmap <- midvals$V1
+    names(midmap) <- midvals$concept_id
+
+    # Finally build up the real covariates.
+    person_id = c()
+    covariate_id = c()
+    numcov = length(pre_covariates$person_id)
+    for (i in 1:numcov) {
+        row <- pre_covariates[i]
+        person <- row$person_id
+        concept <- toString(row$concept_id)
+        covariate = row$concept_id * 10
+        count <- row$count
+        if (count >= highmap[[concept]]) {
+            covariate <- covariate + 3
+        } else if (count >= midmap[[concept]]) {
+            covariate <- covariate + 2
+        } else {
+            covariate <- covariate + 1
+        }
+        person_id[length(person_id) + 1] <- person
+        covariate_id[length(covariate_id) + 1] <- covariate
+    }
+
+    covariate_value = rep(1, length(person_id))
+    return(data.frame(person_id, covariate_id, covariate_value))
+}
+
+
 Hdps.getCohortSize <- function() {
     # This sql has no parameters, though it should probably have some so that
     # it can be used for any table.
-    renderedSql = loadSql("GetCohortSize.sql")
+    renderedSql <- loadSql("GetCohortSize.sql")
     connection$executeforresult(renderedSql)
+}
+
+
+Hdps.toggledebug <- function() {
+    if (debug) {
+        connection$debug <<- FALSE
+        debug <<- FALSE
+        print("debug mode off")
+    } else {
+        connection$debug <<- TRUE
+        debug <<- TRUE
+        print("debug mode on")
+    }
 }
 
 
@@ -66,15 +209,21 @@ Hdps.getCohortSize <- function() {
 Hdps <- setRefClass(
     "Hdps",
     fields=list(
-        connection = "ANY"
+        connection = "ANY",
+        debug = "ANY"
     ),
     methods=list(
         initialize = function(...) {
-          callSuper(...)
+            callSuper(...)
+            connection <<- Connection$new()
+            debug <<- FALSE
         },
         connect = Hdps.connect,
         disconnect = Hdps.disconnect,
         buildCohorts = Hdps.buildCohorts,
-        getCohortSize = Hdps.getCohortSize
+        getCohortSize = Hdps.getCohortSize,
+        buildDimension = Hdps.buildDimension,
+        toggledebug = Hdps.toggledebug,
+        extractCovariates = Hdps.extractCovariates
     )
 )
