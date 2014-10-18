@@ -1,10 +1,11 @@
 library(hdps)
 
 # Base repository folder.
-basedir <- Sys.getenv("HDPSDIR")
+basedir <- getwd()
 
-# TODO: write/find a sane path joining function.
-dimdir <- paste(basedir, "/examples/", "dimensions/", sep="")
+# Directory containing all input sql.
+sqldir <- file.path(basedir, "sql")
+datadir <- file.path(basedir, "data")
 
 # Login info.
 password <- Sys.getenv("MYPGPASSWORD")
@@ -18,6 +19,9 @@ port <- "5439"
 Erythromycin = 1746940
 Amoxicillin = 1713332
 
+rifaximin = 1735947
+Lactulose = 987245
+
 # Condition to check for.
 MyocardialInfarction = 35205189
 
@@ -26,15 +30,39 @@ hdps = Hdps$new()
 
 hdps$connect(dbms, user, password, server, port, schema)
 
-hdps$buildCohorts(Erythromycin, Amoxicillin, MyocardialInfarction)
+hdps$buildCohorts(rifaximin, Lactulose, MyocardialInfarction)
+query <- "
+SELECT
+    person_id as row_id,
+    cohort_id as y
+FROM #cohort_person
+;
+"
+cohortdata <- hdps$connection$executeforresult(query)
+
+filepath <- file.path(datadir, "cohorts.csv")
+write.table(cohortdata, file=filepath, sep="\t", row.names=FALSE)
 
 hdps$getCohortSize()
 
+# Generate and download data.
+sqlfiles <- list.files(file.path(sqldir, "dimensions"))
+for (filename in sqlfiles) {
+    filepath <- file.path(sqldir, "dimensions", filename)
+    dimensionname <- file_path_sans_ext(basename(filepath))
 
-# Build age dimension table.
-parametrizedSql <- loadLocalSql(paste(dimdir, "age.sql", sep=""))
-hdps$buildDimension(parametrizedSql)
-covariates <- hdps$extractCovariates(cutoff = 50)
+    parametrizedSql <- loadLocalSql(filepath)
+    hdps$buildDimension(parametrizedSql)
+
+    dimensiondata <- hdps$extractDimensionData()
+    filename <- paste(dimensionname, ".csv", sep="")
+    filepath <- file.path(datadir, "dimensions", filename)
+    write.table(dimensiondata, file=filepath, sep="\t", row.names=FALSE)
+}
+
+# Everthing below here is wrong...
+
+covariates <- hdps$extractCovariates()
 
 # Build gender dimension table.
 parametrizedSql <- loadLocalSql(paste(dimdir, "gender.sql", sep=""))

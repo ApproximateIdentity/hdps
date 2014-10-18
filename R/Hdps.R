@@ -61,6 +61,84 @@ Hdps.buildDimension <- function(parametrizedSql, ...) {
 }
 
 
+Hdps.extractDimensionData <- function(cutoff = 100) {
+    # Create prevalence table.
+    query = "
+    CREATE TABLE #prevalence (
+        concept_id bigint,
+        count int
+    );
+
+    INSERT INTO #prevalence
+    SELECT
+        concept_id,
+        COUNT(DISTINCT(person_id))
+    FROM
+        #dim
+    GROUP BY
+        concept_id
+    ;
+    "
+    connection$execute(query)
+
+    # TODO: This should probably be an attribute of the class.
+    # Get cohort size.
+    query = "
+    SELECT COUNT(DISTINCT(person_id))
+    FROM cohort_person
+    ;
+    "
+    result = connection$executeforresult(query)
+    numpersons = result$count
+
+    # Get prevalent ids.
+    query = "
+    CREATE TABLE #prevalent_ids (
+        concept_id bigint
+    )
+    ;
+
+    INSERT INTO prevalent_ids
+    SELECT
+        concept_id
+    FROM prevalence
+    ORDER BY @(count/2 - %s)
+    LIMIT %s
+    ;
+    "
+    query = sprintf(query, numpersons, cutoff)
+    connection$execute(query)
+
+    query = "
+    SELECT
+        d.person_id,
+        d.concept_id,
+        d.count
+    FROM
+        #dim d INNER JOIN #prevalent_ids p
+            ON d.concept_id = p.concept_id
+    ;
+    "
+    dimensiondata = connection$executeforresult(query)
+
+    # Clean out temp tables.
+    query = "
+    TRUNCATE TABLE #dim;
+    DROP TABLE #dim;
+
+    TRUNCATE TABLE #prevalence;
+    DROP TABLE #prevalence;
+
+    TRUNCATE TABLE #prevalent_ids;
+    DROP TABLE #prevalent_ids;
+    ;
+    "
+    connection$execute(query)
+
+    return(dimensiondata)
+}
+
+
 # TODO: This function probably should be split up into separate pieces.
 Hdps.extractCovariates <- function(cutoff = 100) {
     # Create prevalence table.
@@ -224,6 +302,7 @@ Hdps <- setRefClass(
         getCohortSize = Hdps.getCohortSize,
         buildDimension = Hdps.buildDimension,
         toggledebug = Hdps.toggledebug,
-        extractCovariates = Hdps.extractCovariates
+        extractCovariates = Hdps.extractCovariates,
+        extractDimensionData = Hdps.extractDimensionData
     )
 )
