@@ -9,6 +9,8 @@ Depends:
     SqlRender,
     tutils,
     data.table,
-    tools
+    tools,
+    bit64,
+    plyr
 License: Apache Version 2.0
 LazyData: true

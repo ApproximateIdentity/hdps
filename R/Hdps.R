@@ -140,125 +140,62 @@ Hdps.extractDimensionData <- function(cutoff = 100) {
 
 
 # TODO: This function probably should be split up into separate pieces.
-Hdps.extractCovariates <- function(cutoff = 100) {
-    # Create prevalence table.
-    query = "
-    CREATE TABLE #prevalence (
-        concept_id bigint,
-        count int
-    );
+Hdps.extractCovariates <- function(filepaths) {
+    covariates <- data.frame(person_id=character(),
+                             covariate_id=character(),
+                             covariate_values=character())
 
-    INSERT INTO #prevalence
-    SELECT
-        concept_id,
-        COUNT(DISTINCT(person_id))
-    FROM
-        #dim
-    GROUP BY
-        concept_id
-    ;
-    "
-    connection$execute(query)
+    for (filepath in filepaths) {
+        # Now build the covariates locally.
+        pre_covariates <- fread(filepath)
 
-    # TODO: This should probably be an attribute of the class.
-    # Get cohort size.
-    query = "
-    SELECT COUNT(DISTINCT(person_id))
-    FROM cohort_person
-    ;
-    "
-    result = connection$executeforresult(query)
-    numpersons = result$count
-
-    # Get prevalent ids.
-    query = "
-    CREATE TABLE #prevalent_ids (
-        concept_id bigint
-    )
-    ;
-
-    INSERT INTO prevalent_ids
-    SELECT
-        concept_id
-    FROM prevalence
-    ORDER BY @(count/2 - %s)
-    LIMIT %s
-    ;
-    "
-    query = sprintf(query, numpersons, cutoff)
-    connection$execute(query)
-
-
-    # Finally download the data and work locally from now on.
-    query = "
-    SELECT
-        d.person_id,
-        d.concept_id,
-        d.count
-    FROM
-        #dim d INNER JOIN #prevalent_ids p
-            ON d.concept_id = p.concept_id
-    ;
-    "
-    pre_covariates = connection$executeforresult(query)
-
-
-    # Clean out temp tables.
-    query = "
-    TRUNCATE TABLE #dim;
-    DROP TABLE #dim;
-
-    TRUNCATE TABLE #prevalence;
-    DROP TABLE #prevalence;
-
-    TRUNCATE TABLE #prevalent_ids;
-    DROP TABLE #prevalent_ids;
-    ;
-    "
-    connection$execute(query)
-
-    # Now build the covariates locally.
-    pre_covariates <- data.table(pre_covariates)
-
-    # Get 75% percentiles.
-    f <- function(numbers) {
-        return(quantile(numbers)[[4]])
-    }
-    highvals <- pre_covariates[, f(count), by = concept_id]
-    highmap <- highvals$V1
-    names(highmap) <- highvals$concept_id
-
-    # Get medians.
-    f <- function(numbers) {
-        return(quantile(numbers)[[3]])
-    }
-    midvals <- pre_covariates[, f(count), by = concept_id]
-    midmap <- midvals$V1
-    names(midmap) <- midvals$concept_id
-
-    # Finally build up the real covariates.
-    person_id = c()
-    covariate_id = c()
-    numcov = length(pre_covariates$person_id)
-    for (i in 1:numcov) {
-        row <- pre_covariates[i]
-        person <- row$person_id
-        concept <- toString(row$concept_id)
-        covariate = row$concept_id * 10
-        count <- row$count
-        if (count >= highmap[[concept]]) {
-            covariate <- covariate + 3
-        } else if (count >= midmap[[concept]]) {
-            covariate <- covariate + 2
-        } else {
-            covariate <- covariate + 1
+        # Get 75% percentiles.
+        f <- function(numbers) {
+            return(quantile(numbers)[[4]])
         }
-        person_id[length(person_id) + 1] <- person
-        covariate_id[length(covariate_id) + 1] <- covariate
-    }
+        highvals <- pre_covariates[, f(count), by = concept_id]
+        highmap <- highvals$V1
+        names(highmap) <- highvals$concept_id
 
-    covariate_value = rep(1, length(person_id))
-    return(data.frame(person_id, covariate_id, covariate_value))
+        # Get medians.
+        f <- function(numbers) {
+            return(quantile(numbers)[[3]])
+        }
+        midvals <- pre_covariates[, f(count), by = concept_id]
+        midmap <- midvals$V1
+        names(midmap) <- midvals$concept_id
+
+        # Build up the real covariates.
+        # This is a hack to make this work right with 64 bit integers.
+        # TODO: Somehow avoid this hack.
+        person_id = c(as.integer64(0))
+        length(person_id) <- 0
+        covariate_id = c(as.integer64(0))
+        length(covariate_id) <- 0
+
+        numcov = length(pre_covariates$person_id)
+        for (i in 1:numcov) {
+            row <- pre_covariates[i]
+            person <- row$person_id
+            concept <- toString(row$concept_id)
+            covariate = row$concept_id * 10
+            count <- row$count
+            if (count >= highmap[[concept]]) {
+                covariate <- covariate + 3
+            } else if (count >= midmap[[concept]]) {
+                covariate <- covariate + 2
+            } else {
+                covariate <- covariate + 1
+            }
+            person_id[length(person_id) + 1] <- person
+            covariate_id[length(covariate_id) + 1] <- covariate
+        }
+
+        covariate_value = rep(1, length(person_id))
+        covariates <- rbind(covariates,
+                            data.frame(person_id, covariate_id, covariate_value))
+    }
+    return(covariates)
 }
 
 
