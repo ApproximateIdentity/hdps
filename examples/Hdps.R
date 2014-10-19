@@ -29,6 +29,7 @@ MyocardialInfarction = 35205189
 hdps = Hdps$new()
 #hdps$toggledebug()
 
+if (FALSE) {
 hdps$connect(dbms, user, password, server, port, schema)
 
 hdps$buildCohorts(rifaximin, Lactulose, MyocardialInfarction)
@@ -68,22 +69,51 @@ covariates <- hdps$extractCovariates(filepaths)
 filepath <- file.path(covariatesdir, "covariates.csv")
 write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
 
+}
+
 # Run Cyclops on the data.
 filepath <- file.path(covariatesdir, "covariates.csv")
 covariates <- read.table(filepath, header=TRUE)
 covariates$person_id <- as.integer64(covariates$person_id)
 covariates$covariate_id <- as.integer64(covariates$covariate_id)
 covariates$covariate_value <- as.integer64(covariates$covariate_value)
-names(covariates) <- c("row_id", "covariate_id", "covariate_value")
-covariates <- arrange(covariates, row_id)
+names(covariates) <- c("ROW_ID", "COVARIATE_ID", "COVARIATE_VALUE")
+covariates <- arrange(covariates, ROW_ID)
 
 filepath <- file.path(datadir, "cohorts.csv")
-cohorts <- read.table(filepath, header=TRUE)
-cohorts$person_id <- as.integer64(cohorts$person_id)
-cohorts$cohort_id <- as.integer(cohorts$cohort_id)
-names(cohorts) <- c("row_id", "y")
-cohorts <- arrange(cohorts, row_id)
+outcomes <- read.table(filepath, header=TRUE)
+outcomes$person_id <- as.integer64(outcomes$person_id)
+outcomes$cohort_id <- as.integer(outcomes$cohort_id)
+names(outcomes) <- c("ROW_ID", "Y")
+outcomes <- arrange(outcomes, ROW_ID)
+outcomes$STRATUM_ID <- outcomes$ROW_ID
+
+library(Cyclops)
+
+modelType = "lr",
+addIntercept = TRUE
+offsetAlreadyOnLogScale = FALSE
+sortCovariates = TRUE
+makeCovariatesDense = NULL
+  
+useOffsetCovariate = NULL  
+outcomes$STRATUM_ID = outcomes$ROW_ID
+outcomes$TIME = 0
 
 library(Cyclops)
 library(CohortMethod)
-model <- createCyclopsData(cohorts, covariates)
+
+cyclopsData <- createCyclopsData(outcomes, covariates, modelType = 'lr')
+
+ps <- outcomes[,c("Y","ROW_ID")]
+
+prior = prior("laplace")
+control <- control(cvType = "auto", cvRepetitions = 2,
+                   noiseLevel = "quiet")
+
+cyclopsFit <- fitCyclopsModel(
+    cyclopsData, 
+    prior = prior,
+    control = control)
+
+pred <- predict(cyclopsFit)
