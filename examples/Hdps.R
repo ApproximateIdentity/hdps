@@ -77,6 +77,11 @@ write.table(nameMapping, filepath, sep="\t", row.names=FALSE)
 filepath <- file.path(covariatesdir, "cohorts.csv")
 write.table(cohorts, filepath, sep="\t", row.names=FALSE)
 
+# Build covariate mapping.
+filepaths <- list.files(file.path(datadir, "dimensions"), full.names=TRUE)
+covariateMapping <- buildCovariateMapping(filepaths)
+filepath <- file.path(covariatesdir, "covariateMapping.csv")
+write.table(covariateMapping, file=filepath, sep="\t", row.names=FALSE)
 
 
 # Next build covariates locally.
