@@ -63,9 +63,25 @@ for (filepath in filepaths) {
 
 hdps$disconnect()
 
+# First build cohorts and name mapping locally.
+filepath <- file.path(datadir, "cohorts.csv")
+cohorts <- fread(filepath)
+
+nameMapping <- data.frame(new_id = 1:length(cohorts$person_id),
+                          old_id = cohorts$person_id)
+cohorts$person_id <- nameMapping$new_id
+
+filepath <- file.path(covariatesdir, "nameMapping.csv")
+write.table(nameMapping, filepath, sep="\t", row.names=FALSE)
+
+filepath <- file.path(covariatesdir, "cohorts.csv")
+write.table(cohorts, filepath, sep="\t", row.names=FALSE)
+
+
+
 # Next build covariates locally.
 filepaths <- list.files(file.path(datadir, "dimensions"), full.names=TRUE)
-covariates <- hdps$extractCovariates(filepaths)
+covariates <- extractCovariates(filepaths)
 filepath <- file.path(covariatesdir, "covariates.csv")
 write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
 
@@ -101,19 +117,14 @@ outcomes$STRATUM_ID = outcomes$ROW_ID
 outcomes$TIME = 0
 
 library(Cyclops)
-library(CohortMethod)
 
-cyclopsData <- createCyclopsData(outcomes, covariates, modelType = 'lr')
 
-ps <- outcomes[,c("Y","ROW_ID")]
+m <- Matrix(0, nrow = 1000, ncol = 1000, sparse = TRUE)
+m[1,1] <- 1
+y <- rep(1, 1000)
 
-prior = prior("laplace")
-control <- control(cvType = "auto", cvRepetitions = 2,
-                   noiseLevel = "quiet")
-
-cyclopsFit <- fitCyclopsModel(
-    cyclopsData, 
-    prior = prior,
-    control = control)
+cyclopsData <- createCyclopsDataFrame(y = y, sx = m, modelType = "pr")
+cyclopsFit <- fitCyclopsModel(cyclopsData, prior = prior("none"))
+summary(cyclopsFit)
 
 pred <- predict(cyclopsFit)
