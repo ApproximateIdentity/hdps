@@ -2,49 +2,50 @@
 buildCovariateMapping <- function(filepaths) {
     # HACK: The initial row is necessary to avoid problems with the integer64
     # data type which result from built-in type coersions within R.
-    new_covariate = 0
-    old_covariate = as.integer64.character('10000000000')
-    level = ""
-    dim = ""
-
     covariateMapping <- data.frame(
-        new_covariate = new_covariate,
-        old_covariate = old_covariate,
-        level = level,
-        dim = dim)
+        new_covariate = 0,
+        old_covariate = as.integer64.character('0'),
+        level = "",
+        dim = "")
 
     for (filepath in filepaths) {
-        dimensionName <- file_path_sans_ext(basename(filepath))
-        oldCovariates <- unique(fread(filepath)$concept_id)
+        dimName <- file_path_sans_ext(basename(filepath))
 
-        numOldCovariates <- length(oldCovariates)
-        markers <- rep(c("l", "m", "h"), numOldCovariates)
-        dimensionNames <- rep(dimensionName, numOldCovariates * 3)
+        oldCov <- unique(fread(filepath)$concept_id)
+        numOldCov <- length(oldCov)
+
+        # The three levels correspond to 1, median, and 75% percentile as
+        # described in the HDPS algorithm.
+        level <- rep(c("l", "m", "h"), numOldCov)
+
+        # Replicate the dimName to fit the column of the data frame.
+        dimNames <- rep(dimName, numOldCov * 3)
         
         # The shift of '- 1' on the right is necessary because the initial
         # extra row added to the data frame in the hack above.
         base <- length(covariateMapping$new_covariate) - 1
-        offset <- numOldCovariates * 3
-        newCovariates <- (base + 1) : (base + offset)
+        offset <- numOldCov * 3
+        newCov <- (base + 1) : (base + offset)
 
-        cov <- oldCovariates[1]
+        # The old covariates are "tripled"
+        cov <- oldCov[1]
         triples <- c(cov, cov, cov)
-        for (i in 2:numOldCovariates) {
-            covariate <- oldCovariates[i]
-            newTriple <- c(covariate, covariate, covariate)
+        for (i in 2:numOldCov) {
+            newTriple <- rep(oldCov[i], 3)
             triples <- c(triples, newTriple)
         }
-        oldCovariates <- triples
+        oldCov <- triples
 
         newCovariateMapping <- data.frame(
-            new_covariate = newCovariates,
-            old_covariate = oldCovariates,
-            level = markers,
-            dim = dimensionNames)
+            new_covariate = newCov,
+            old_covariate = oldCov,
+            level = level,
+            dim = dimNames)
 
         covariateMapping <- rbind(covariateMapping, newCovariateMapping)
     }
 
+    # Remove the initial row and reindex the data frame.
     covariateMapping <- covariateMapping[-1, ]
     rownames(covariateMapping) <- 1:nrow(covariateMapping)
     
