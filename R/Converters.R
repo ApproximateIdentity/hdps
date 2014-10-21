@@ -86,18 +86,12 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
         dimData <- fread(filepath)
 
         # Get 75% percentiles.
-        f <- function(numbers) {
-            return(quantile(numbers)[[4]])
-        }
-        highvals <- dimData[, f(count), by = concept_id]
+        highvals <- dimData[, seventyFifthPercentile(count), by = concept_id]
         highmap <- highvals$V1
         names(highmap) <- highvals$concept_id
 
         # Get medians.
-        f <- function(numbers) {
-            return(quantile(numbers)[[3]])
-        }
-        midvals <- dimData[, f(count), by = concept_id]
+        midvals <- dimData[, fiftiethPercentile(count), by = concept_id]
         midmap <- midvals$V1
         names(midmap) <- midvals$concept_id
 
@@ -109,9 +103,11 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
         for (i in 1:numcov) {
             row <- dimData[i]
 
+            # Get converted person id.
             person <- row$person_id
             person <- nameMapping[toString(person)]
 
+            # Get converted covariate id.
             concept <- toString(row$concept_id)
             count <- row$count
             if (count >= highmap[[concept]]) {
@@ -127,7 +123,8 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
             person_id[length(person_id) + 1] <- person
             covariate_id[length(covariate_id) + 1] <- covariate
         }
-
+        
+        # The covariate value is always 1 in HDPS.
         covariate_value = rep(1, length(person_id))
 
         new_covariates <- data.frame(person_id, covariate_id, covariate_value)
@@ -135,4 +132,16 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
     }
 
     covariates
+}
+
+
+# TODO: Replace this with "median" function. For some reason using median
+# throws errors above.
+fiftiethPercentile <- function(numbers) {
+    return(quantile(numbers)[[3]])
+}
+
+
+seventyFifthPercentile <- function(numbers) {
+    return(quantile(numbers)[[4]])
 }

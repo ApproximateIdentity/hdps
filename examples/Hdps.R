@@ -59,9 +59,11 @@ for (filepath in filepaths) {
     filename <- paste(dimensionname, ".csv", sep="")
     filepath <- file.path(datadir, "dimensions", filename)
     write.table(dimensiondata, file=filepath, sep="\t", row.names=FALSE)
-}
+    }
 
 hdps$disconnect()
+
+}
 
 # Build name record.
 filepath <- file.path(datadir, "cohorts.csv")
@@ -93,46 +95,31 @@ covariates <- extractCovariates(filepaths, nameMapping, covariateMapping)
 filepath <- file.path(covariatesdir, "covariates.csv")
 write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
 
-}
 
-# Run Cyclops on the data.
+library(Cyclops)
+
+# Load data.
 filepath <- file.path(covariatesdir, "covariates.csv")
 covariates <- read.table(filepath, header=TRUE)
-covariates$person_id <- as.integer64(covariates$person_id)
-covariates$covariate_id <- as.integer64(covariates$covariate_id)
-covariates$covariate_value <- as.integer64(covariates$covariate_value)
-names(covariates) <- c("ROW_ID", "COVARIATE_ID", "COVARIATE_VALUE")
-covariates <- arrange(covariates, ROW_ID)
+filepath <- file.path(covariatesdir, "cohorts.csv")
+cohorts <- read.table(filepath, header=TRUE)
 
-filepath <- file.path(datadir, "cohorts.csv")
-outcomes <- read.table(filepath, header=TRUE)
-outcomes$person_id <- as.integer64(outcomes$person_id)
-outcomes$cohort_id <- as.integer(outcomes$cohort_id)
-names(outcomes) <- c("ROW_ID", "Y")
-outcomes <- arrange(outcomes, ROW_ID)
-outcomes$STRATUM_ID <- outcomes$ROW_ID
+numPersons <- max(cohorts$person_id)
+numCovariates <- max(covariates$covariate_id)
 
-library(Cyclops)
+X <- Matrix(0, nrow = numPersons, ncol = numCovariates, sparse = TRUE)
+for (r in 1:nrow(covariates)) {
+    row <- covariates[r,]
+    i <- row$person_id
+    j <- row$covariate_id
+    val <- row$covariate_value
+    X[i, j] <- val
+}
 
-modelType = "lr",
-addIntercept = TRUE
-offsetAlreadyOnLogScale = FALSE
-sortCovariates = TRUE
-makeCovariatesDense = NULL
-  
-useOffsetCovariate = NULL  
-outcomes$STRATUM_ID = outcomes$ROW_ID
-outcomes$TIME = 0
+y <- arrange(cohorts, person_id)$cohort_id
 
-library(Cyclops)
-
-
-m <- Matrix(0, nrow = 1000, ncol = 1000, sparse = TRUE)
-m[1,1] <- 1
-y <- rep(1, 1000)
-
-cyclopsData <- createCyclopsDataFrame(y = y, sx = m, modelType = "pr")
-cyclopsFit <- fitCyclopsModel(cyclopsData, prior = prior("none"))
-summary(cyclopsFit)
+cyclopsData <- createCyclopsDataFrame(y = y, sx = X, modelType = "pr")
+cyclopsFit <- fitCyclopsModel(cyclopsData, prior = prior("laplace"))
+#summary(cyclopsFit)
 
 pred <- predict(cyclopsFit)
