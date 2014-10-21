@@ -3,10 +3,17 @@ library(hdps)
 # Base repository folder.
 basedir <- getwd()
 
+
 # Directory containing all input sql.
 sqldir <- file.path(basedir, "sql")
+sqldimdir <- file.path(sqldir, "dimensions")
 datadir <- file.path(basedir, "data")
+datadimdir <- file.path(datadir, "dimensions")
 covariatesdir <- file.path(basedir, "covariates")
+
+# Build temporary directories if necessary.
+dir.create(datadimdir, showWarnings = FALSE, recursive = TRUE)
+dir.create(covariatesdir, showWarnings = FALSE, recursive = TRUE)
 
 # Login info.
 password <- Sys.getenv("MYPGPASSWORD")
@@ -49,7 +56,7 @@ write.table(cohortdata, file=filepath, sep="\t", row.names=FALSE)
 
 
 # Generate and download dimensions data.
-filepaths <- list.files(file.path(sqldir, "dimensions"), full.name=TRUE)
+filepaths <- list.files(sqldimdir, full.name=TRUE)
 for (filepath in filepaths) {
     dimensionname <- file_path_sans_ext(basename(filepath))
 
@@ -58,7 +65,7 @@ for (filepath in filepaths) {
 
     dimensiondata <- hdps$extractDimensionData()
     filename <- paste(dimensionname, ".csv", sep="")
-    filepath <- file.path(datadir, "dimensions", filename)
+    filepath <- file.path(datadimdir, filename)
     write.table(dimensiondata, file=filepath, sep="\t", row.names=FALSE)
     }
 
@@ -80,7 +87,7 @@ filepath <- file.path(covariatesdir, "cohorts.csv")
 write.table(cohorts, filepath, sep="\t", row.names=FALSE)
 
 # Build covariate record.
-filepaths <- list.files(file.path(datadir, "dimensions"), full.names=TRUE)
+filepaths <- list.files(datadimdir, full.names=TRUE)
 covariateRecord <- buildCovariateRecord(filepaths)
 filepath <- file.path(covariatesdir, "covariateRecord.csv")
 write.table(covariateRecord, file=filepath, sep="\t", row.names=FALSE)
@@ -91,7 +98,7 @@ nameMapping <- nameRecord$new_id
 names(nameMapping) <- nameRecord$old_id
 
 # Next build covariates locally.
-filepaths <- list.files(file.path(datadir, "dimensions"), full.names=TRUE)
+filepaths <- list.files(datadimdir, full.names=TRUE)
 covariates <- extractCovariates(filepaths, nameMapping, covariateMapping)
 filepath <- file.path(covariatesdir, "covariates.csv")
 write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
