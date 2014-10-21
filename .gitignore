@@ -1,0 +1,3 @@
+examples/covariates/*.csv
+examples/data/*.csv
+examples/data/dimensions/*.csv
