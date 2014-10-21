@@ -29,6 +29,7 @@ MyocardialInfarction = 35205189
 hdps = Hdps$new()
 #hdps$toggledebug()
 
+# Set to true to download all the data.
 if (FALSE) {
 hdps$connect(dbms, user, password, server, port, schema)
 
@@ -72,8 +73,8 @@ nameRecord <- data.frame(new_id = 1:length(cohorts$person_id),
                          old_id = cohorts$person_id)
 cohorts$person_id <- nameRecord$new_id
 
-filepath <- file.path(covariatesdir, "nameMapping.csv")
-write.table(nameMapping, filepath, sep="\t", row.names=FALSE)
+filepath <- file.path(covariatesdir, "nameRecord.csv")
+write.table(nameRecord, filepath, sep="\t", row.names=FALSE)
 
 filepath <- file.path(covariatesdir, "cohorts.csv")
 write.table(cohorts, filepath, sep="\t", row.names=FALSE)
