@@ -1,12 +1,14 @@
+# TODO: Change 'build' to 'get' in function names. Change 'mapping' to 'map'.
 #' @export
-buildCovariateMapping <- function(filepaths) {
+buildCovariateRecord <- function(filepaths) {
     # HACK: The initial row is necessary to avoid problems with the integer64
     # data type which result from built-in type coersions within R.
-    covariateMapping <- data.frame(
+    covariateRecord <- data.frame(
         new_covariate = 0,
         old_covariate = as.integer64.character('0'),
         level = "",
-        dim = "")
+        dim = "",
+        stringsAsFactors = FALSE)
 
     for (filepath in filepaths) {
         dimName <- file_path_sans_ext(basename(filepath))
@@ -23,7 +25,7 @@ buildCovariateMapping <- function(filepaths) {
         
         # The shift of '- 1' on the right is necessary because the initial
         # extra row added to the data frame in the hack above.
-        base <- length(covariateMapping$new_covariate) - 1
+        base <- length(covariateRecord$new_covariate) - 1
         offset <- numOldCov * 3
         newCov <- (base + 1) : (base + offset)
 
@@ -36,39 +38,58 @@ buildCovariateMapping <- function(filepaths) {
         }
         oldCov <- triples
 
-        newCovariateMapping <- data.frame(
+        newCovariateRecord <- data.frame(
             new_covariate = newCov,
             old_covariate = oldCov,
             level = level,
             dim = dimNames)
 
-        covariateMapping <- rbind(covariateMapping, newCovariateMapping)
+        covariateRecord <- rbind(covariateRecord, newCovariateRecord)
     }
 
     # Remove the initial row and reindex the data frame.
-    covariateMapping <- covariateMapping[-1, ]
-    rownames(covariateMapping) <- 1:nrow(covariateMapping)
+    covariateRecord <- covariateRecord[-1, ]
+    rownames(covariateRecord) <- 1:nrow(covariateRecord)
     
-    covariateMapping
+    covariateRecord
 }
 
 
 #' @export
-extractCovariates <- function(filepaths) {
-    covariates <- data.frame(person_id=character(),
-                             covariate_id=character(),
-                             covariate_values=character())
+buildCovariateMapping <- function(covariateRecord) {
+    covMapping <- covariateRecord$new_covariate
 
+    oldCov <- covariateRecord$old_covariate
+    level <- covariateRecord$level
+    
+    covNames <- covariateRecord$dim
+    for (i in 1:length(covNames)) {
+        cov <- as.character.integer64(oldCov[i])
+        name <- paste(covNames[i], cov, level[i], sep="")
+        covNames[i] <- name
+    }
+
+    names(covMapping) <- covNames
+    
+    covMapping
+}
+
+
+# TODO: This should probably be combined with buildCovariateMapping so that all
+# files are not read through twice, but this is conceptually a little simpler.
+#' @export
+extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
+    covariates <- data.frame()
 
     for (filepath in filepaths) {
-        # Now build the covariates locally.
-        pre_covariates <- fread(filepath)
+        dimName <- file_path_sans_ext(basename(filepath))
+        dimData <- fread(filepath)
 
         # Get 75% percentiles.
         f <- function(numbers) {
             return(quantile(numbers)[[4]])
         }
-        highvals <- pre_covariates[, f(count), by = concept_id]
+        highvals <- dimData[, f(count), by = concept_id]
         highmap <- highvals$V1
         names(highmap) <- highvals$concept_id
 
@@ -76,39 +97,42 @@ extractCovariates <- function(filepaths) {
         f <- function(numbers) {
             return(quantile(numbers)[[3]])
         }
-        midvals <- pre_covariates[, f(count), by = concept_id]
+        midvals <- dimData[, f(count), by = concept_id]
         midmap <- midvals$V1
         names(midmap) <- midvals$concept_id
 
-        # Build up the real covariates.
-        # This is a hack to make this work right with 64 bit integers.
-        # TODO: Somehow avoid this hack.
-        person_id = c(as.integer64(0))
-        length(person_id) <- 0
-        covariate_id = c(as.integer64(0))
-        length(covariate_id) <- 0
+        # Build up the covariates and person ids.
+        person_id = c()
+        covariate_id = c()
 
-        numcov = length(pre_covariates$person_id)
+        numcov = length(dimData$person_id)
         for (i in 1:numcov) {
-            row <- pre_covariates[i]
+            row <- dimData[i]
+
             person <- row$person_id
+            person <- nameMapping[toString(person)]
+
             concept <- toString(row$concept_id)
-            covariate = row$concept_id * 10
             count <- row$count
             if (count >= highmap[[concept]]) {
-                covariate <- covariate + 3
+                level <- "h"
             } else if (count >= midmap[[concept]]) {
-                covariate <- covariate + 2
+                level <- "m"
             } else {
-                covariate <- covariate + 1
+                level <- "l"
             }
+            key <- paste(dimName, concept, level, sep="")
+            covariate <- covariateMapping[key]
+
             person_id[length(person_id) + 1] <- person
             covariate_id[length(covariate_id) + 1] <- covariate
         }
 
         covariate_value = rep(1, length(person_id))
-        covariates <- rbind(covariates,
-                            data.frame(person_id, covariate_id, covariate_value))
+
+        new_covariates <- data.frame(person_id, covariate_id, covariate_value)
+        covariates <- rbind(covariates, new_covariates)
     }
-    return(covariates)
+
+    covariates
 }

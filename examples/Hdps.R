@@ -63,13 +63,12 @@ for (filepath in filepaths) {
 
 hdps$disconnect()
 
-# First build cohorts and name mapping locally.
+# Build name record.
 filepath <- file.path(datadir, "cohorts.csv")
 cohorts <- fread(filepath)
-
-nameMapping <- data.frame(new_id = 1:length(cohorts$person_id),
-                          old_id = cohorts$person_id)
-cohorts$person_id <- nameMapping$new_id
+nameRecord <- data.frame(new_id = 1:length(cohorts$person_id),
+                         old_id = cohorts$person_id)
+cohorts$person_id <- nameRecord$new_id
 
 filepath <- file.path(covariatesdir, "nameMapping.csv")
 write.table(nameMapping, filepath, sep="\t", row.names=FALSE)
@@ -77,16 +76,20 @@ write.table(nameMapping, filepath, sep="\t", row.names=FALSE)
 filepath <- file.path(covariatesdir, "cohorts.csv")
 write.table(cohorts, filepath, sep="\t", row.names=FALSE)
 
-# Build covariate mapping.
+# Build covariate record.
 filepaths <- list.files(file.path(datadir, "dimensions"), full.names=TRUE)
-covariateMapping <- buildCovariateMapping(filepaths)
-filepath <- file.path(covariatesdir, "covariateMapping.csv")
-write.table(covariateMapping, file=filepath, sep="\t", row.names=FALSE)
+covariateRecord <- buildCovariateRecord(filepaths)
+filepath <- file.path(covariatesdir, "covariateRecord.csv")
+write.table(covariateRecord, file=filepath, sep="\t", row.names=FALSE)
 
+# Build covariate and person mappings.
+covariateMapping <- buildCovariateMapping(covariateRecord)
+nameMapping <- nameRecord$new_id
+names(nameMapping) <- nameRecord$old_id
 
 # Next build covariates locally.
 filepaths <- list.files(file.path(datadir, "dimensions"), full.names=TRUE)
-covariates <- extractCovariates(filepaths)
+covariates <- extractCovariates(filepaths, nameMapping, covariateMapping)
 filepath <- file.path(covariatesdir, "covariates.csv")
 write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
 
