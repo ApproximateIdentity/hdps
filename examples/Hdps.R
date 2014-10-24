@@ -1,14 +1,11 @@
 library(hdps)
 
-# Base repository folder.
+# Base repository folder. You may want to change this.
 basedir <- getwd()
-
 
 # Directory containing all input sql.
 sqldir <- file.path(basedir, "sql")
-sqldimdir <- file.path(sqldir, "dimensions")
 datadir <- file.path(basedir, "data")
-datadimdir <- file.path(datadir, "dimensions")
 covariatesdir <- file.path(basedir, "covariates")
 
 # Build temporary directories if necessary.
@@ -16,22 +13,254 @@ dir.create(datadimdir, showWarnings = FALSE, recursive = TRUE)
 dir.create(covariatesdir, showWarnings = FALSE, recursive = TRUE)
 
 # Login info.
-password <- Sys.getenv("MYPGPASSWORD")
-dbms <- "redshift"
-user <- Sys.getenv("USER")
-server <- "omop-datasets.cqlmv7nlakap.us-east-1.redshift.amazonaws.com/truven"
-schema <- "mslr_cdm4"
-port <- "5439"
+connectionDetails <- list(
+    password = Sys.getenv("MYPGPASSWORD"),
+    dbms = "redshift",
+    user = Sys.getenv("USER"),
+    server = "omop-datasets.cqlmv7nlakap.us-east-1.redshift.amazonaws.com/truven",
+    schema = "mslr_cdm4",
+    port = "5439")
 
-# Drugs to compare.
-Erythromycin = 1746940
-Amoxicillin = 1713332
+rifaximin <- 1735947
+Lactulose <- 987245
+MyocardialInfarction <- 35205189
 
-rifaximin = 1735947
-Lactulose = 987245
+# Cohort details.
+cohortDetails <- list(
+    drugA = rifaximin,
+    drugB = Lactulose,
+    indicator = MyocardialInfarction,
+    schema = "mslr_cdm4")
+
+generateDataFromSql(sqldir, datadir, connectionDetails, cohortDetails)
+
+generateDataFromSql <- function(sqldir, datadir, connectionDetails,
+                                cohortDetails, cutoff=NULL) {
+    # Check that the directories and necessary files exist.
+    if (!file.exists(sqldir) || !(file.info(sqldir)$isdir)) {
+        print(paste("Error: Directory", sqldir, "does not exist."))
+        return(NULL)
+    }
+    if (!file.exists(datadir) || !(file.info(datadir)$isdir)) {
+        print(paste("Error: Directory", datadir, "does not exist."))
+        return(NULL)
+    }
+    cohortsfile <- file.path(sqldir, "BuildCohorts.sql")
+    if (!file.exists(cohortsfile)) {
+        print(paste("Error: File", cohortsfile, "does not exist."))
+        return(NULL)
+    }
+    dimdir <- file.path(sqldir, "dimensions")
+    if (!file.exists(dimdir) || !(file.info(dimdir)$isdir)) {
+        print(paste("Error: Directory", dimdir, "does not exist."))
+        return(NULL)
+    }
+    dimfiles <- list.files(dimdir)
+    if (length(dimfiles) == 0) {
+        print(paste("Error: No files found in", dimdir))
+        return(NULL)
+    }
+    
+    # TODO: Move somewhere global.
+    defaultCohortDetails <- list(
+        washoutWindow=183,
+        indicationLookbackWindow=183,
+        studyStartDate="",
+        studyEndDate="",
+        exclusionConceptIds = c(4027133, 4032243, 4146536, 2002282, 2213572,
+                                2005890, 43534760, 21601019),
+        exposureTable="DRUG_ERA")
+
+    # Fill in missing cohortDetails with defaults.
+    for (i in 1:length(defaultCohortDetails)) {
+        key <- names(defaultCohortDetails)[i]
+        value <- defaultCohortDetails[key]
+        if (is.null(cohortDetails[key][[1]])) {
+            cohortDetails[key] = value
+        }
+    }
+
+    # Build cohort sql.
+    cohortsql <- readfile(cohortsfile)
+    cohortsql <- renderSql(
+        sql = cohortsql,
+        cdm_schema=cohortDetails$cdmSchema,
+        results_schema=cohortDetails$cdmSchema,
+        target_drug_concept_id=cohortDetails$drugA,
+        comparator_drug_concept_id=cohortDetails$drugB,
+        indication_concept_ids=cohortDetails$indicator,
+        washout_window=cohortDetails$washoutWindow,
+        indication_lookback_window=cohortDetails$indicationLookbackWindow,
+        study_start_date=cohortDetails$studyStartDate,
+        study_end_date=cohortDetails$studyEndDate,
+        exclusion_concept_ids=cohortDetails$exclusionConceptIds,
+        exposure_table=cohortDetails$exposureTable)
+    cohortsql <- translateSql(sql = cohortsql,
+                              targetDialect = connectionDetails$dbms)
+
+    dimsqls <- list()
+    for (dimpath in dimfiles) {
+        dimname <- file_path_sans_ext(basename(dimpath))
+        dimsql <- readfile(dimpath)
+        dimsql <- translateSql(sql = dimsql,
+                               targetDialect = connectionDetails$dbms)
+        dimsqls[dimname] <- dimsql
+    }
+
+    conn <- connect(
+        dbms=connectionDetails$dbms,
+        connectionDetails$user,
+        connectionDetails$password,
+        connectionDetails$server,
+        connectionDetails$port,
+        connectionDetails$schema)
+
+    print("Building cohorts.")
+    executeSql(conn, cohortsql)
+
+    print("Downloading cohorts data.")
+    cohorts <- downloadcohorts(conn)
+    savecohorts(datadir, cohorts)
+
+    for (i in 1:length(dimsqls)) {
+        dimname <- names(dimsqls)[i]
+        dimsql <- dimsqls[dimname]
+
+        print(paste("Building dimension:", dimname))
+        executeSql(conn, dimsql)
+
+        print("Downloading dimension data...")
+        dim <- downloaddimension(conn, connectionDetails$dbms, cutoff)
+        savedimension(datadir, dimname, dim)
+    }
+
+    close(conn)
+}
+
+
+savedimension <- function(datadir, dimname, dim) {
+    filename <- paste(dimname, ".csv", sep="")
+    filepath <- file.path(datadir, "dimensions", filename)
+    write.table(dim, file=filepath, sep="\t", row.names=FALSE)
+}
+
+
+downloaddimension <- function(conn, dbms, cutoff) {
+    if is.null(cutoff) {
+        # Infinity.
+        cutoff <- 1000000000
+    }
+    # Create prevalence table.
+    sql = "
+    CREATE TABLE #prevalence (
+        concept_id bigint,
+        count int
+    );
+
+    INSERT INTO #prevalence
+    SELECT
+        concept_id,
+        COUNT(DISTINCT(person_id))
+    FROM
+        #dim
+    GROUP BY
+        concept_id
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)
+    executeSql(sql)
+
+    # Get cohort size.
+    sql = "
+    SELECT COUNT(DISTINCT(person_id))
+    FROM cohort_person
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)
+    result <- executeSql(sql)
+    numpersons = result$count
+
+    # Get prevalent ids.
+    sql = "
+    CREATE TABLE #prevalent_ids (
+        concept_id bigint
+    )
+    ;
+
+    INSERT INTO prevalent_ids
+    SELECT
+        concept_id
+    FROM prevalence
+    ORDER BY @(count/2 - %s)
+    LIMIT %s
+    ;
+    "
+    # TODO: This should use renderSql.
+    sql = sprintf(query, numpersons, cutoff)
+    sql <- translateSql(sql = sql, targetDialect = dbms)
+    executeSql(sql)
+
+    sql = "
+    SELECT
+        d.person_id,
+        d.concept_id,
+        d.count
+    FROM
+        #dim d INNER JOIN #prevalent_ids p
+            ON d.concept_id = p.concept_id
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)
+    dim <- executeSql(sql)
+
+    # Clean out temp tables.
+    sql = "
+    TRUNCATE TABLE #dim;
+    DROP TABLE #dim;
+
+    TRUNCATE TABLE #prevalence;
+    DROP TABLE #prevalence;
+
+    TRUNCATE TABLE #prevalent_ids;
+    DROP TABLE #prevalent_ids;
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)
+    executeSql(sql)
+
+    return(dim)
+}
+
+
+
+savecohorts(datadir, cohorts) {
+    filepath <- file.path(datadir, "cohorts.csv")
+    write.table(cohorts, file=filepath, sep="\t", row.names=FALSE)
+}
+
+downloadcohorts <- function(conn) {
+    sql <- "
+    SELECT
+        person_id,
+        cohort_id
+    FROM #cohort_person
+    ;
+    "
+    cohorts <- executeSql(conn, sql)
+    cohorts
+}
+
+
+readfile <- function(filepath) {
+    text <- readChar(filepath, file.info(filepath)$size)
+    return(text)
+}
+
+
+generateDataFromSql(sqldir, datadir, connectionDetails, cohortDetails)
+
 
 # Condition to check for.
-MyocardialInfarction = 35205189
 
 hdps = Hdps$new()
 #hdps$toggledebug()
