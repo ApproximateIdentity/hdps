@@ -9,7 +9,8 @@ datadir <- file.path(basedir, "data")
 covariatesdir <- file.path(basedir, "covariates")
 
 # Build temporary directories if necessary.
-dir.create(datadimdir, showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(datadir, "dimensions"),
+           showWarnings = FALSE, recursive = TRUE)
 dir.create(covariatesdir, showWarnings = FALSE, recursive = TRUE)
 
 # Login info.
@@ -64,8 +65,9 @@ downloaddimension <- function(conn, dbms, cutoff) {
         concept_id
     ;
     "
-    sql <- translateSql(sql = sql, targetDialect = dbms)
-    executeSql(sql)
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+
 
     # Get cohort size.
     sql = "
@@ -73,8 +75,8 @@ downloaddimension <- function(conn, dbms, cutoff) {
     FROM cohort_person
     ;
     "
-    sql <- translateSql(sql = sql, targetDialect = dbms)
-    result <- executeSql(sql)
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    result <- dbGetQuery(conn, sql)
     numpersons = result$count
 
     # Get prevalent ids.
@@ -93,9 +95,10 @@ downloaddimension <- function(conn, dbms, cutoff) {
     ;
     "
     # TODO: This should use renderSql.
-    sql = sprintf(query, numpersons, cutoff)
-    sql <- translateSql(sql = sql, targetDialect = dbms)
-    executeSql(sql)
+    sql = sprintf(sql, numpersons, cutoff)
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+
 
     sql = "
     SELECT
@@ -107,8 +110,8 @@ downloaddimension <- function(conn, dbms, cutoff) {
             ON d.concept_id = p.concept_id
     ;
     "
-    sql <- translateSql(sql = sql, targetDialect = dbms)
-    dim <- executeSql(sql)
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    dim <- dbGetQuery(conn, sql)
 
     # Clean out temp tables.
     sql = "
@@ -122,8 +125,9 @@ downloaddimension <- function(conn, dbms, cutoff) {
     DROP TABLE #prevalent_ids;
     ;
     "
-    sql <- translateSql(sql = sql, targetDialect = dbms)
-    executeSql(sql)
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+
 
     return(dim)
 }
@@ -135,7 +139,7 @@ savecohorts <- function(datadir, cohorts) {
     write.table(cohorts, file=filepath, sep="\t", row.names=FALSE)
 }
 
-downloadcohorts <- function(conn) {
+downloadcohorts <- function(conn, dbms) {
     sql <- "
     SELECT
         person_id,
@@ -143,7 +147,8 @@ downloadcohorts <- function(conn) {
     FROM #cohort_person
     ;
     "
-    cohorts <- executeSql(conn, sql)
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    cohorts <- dbGetQuery(conn, sql)
     cohorts
 }
 
@@ -164,7 +169,7 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
         print(paste("Error: Directory", datadir, "does not exist."))
         return(NULL)
     }
-    cohortsfile <- file.path(sqldir, "BuildCohorts2.sql")
+    cohortsfile <- file.path(sqldir, "BuildCohorts.sql")
     if (!file.exists(cohortsfile)) {
         print(paste("Error: File", cohortsfile, "does not exist."))
         return(NULL)
@@ -203,8 +208,8 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
     cohortsql <- readfile(cohortsfile)
     cohortsql <- renderSql(
         sql = cohortsql,
-        cdm_schema=cohortDetails$cdmSchema,
-        results_schema=cohortDetails$cdmSchema,
+        cdm_schema=cohortDetails$schema,
+        results_schema=cohortDetails$schema,
         target_drug_concept_id=cohortDetails$drugA,
         comparator_drug_concept_id=cohortDetails$drugB,
         indication_concept_ids=cohortDetails$indicator,
@@ -213,18 +218,17 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
         study_start_date=cohortDetails$studyStartDate,
         study_end_date=cohortDetails$studyEndDate,
         exclusion_concept_ids=cohortDetails$exclusionConceptIds,
-        exposure_table=cohortDetails$exposureTable)
+        exposure_table=cohortDetails$exposureTable)$sql
     cohortsql <- translateSql(sql = cohortsql,
                               sourceDialect = "sql server",
-                              targetDialect = connectionDetails$dbms)
-    translateSql(sql = cohortsql)
+                              targetDialect = connectionDetails$dbms)$sql
 
     dimsqls <- list()
     for (dimpath in dimfiles) {
         dimname <- file_path_sans_ext(basename(dimpath))
         dimsql <- readfile(dimpath)
         dimsql <- translateSql(sql = dimsql,
-                               targetDialect = connectionDetails$dbms)
+                               targetDialect = connectionDetails$dbms)$sql
         dimsqls[dimname] <- dimsql
     }
 
@@ -237,25 +241,26 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
         connectionDetails$schema)
 
     print("Building cohorts.")
-    executeSql(conn, cohortsql)
+    executeSql(conn, cohortsql, progressBar = FALSE, reportOverallTime = FALSE)
 
     print("Downloading cohorts data.")
-    cohorts <- downloadcohorts(conn)
+    cohorts <- downloadcohorts(conn, connectionDetails$dbms)
     savecohorts(datadir, cohorts)
 
     for (i in 1:length(dimsqls)) {
         dimname <- names(dimsqls)[i]
-        dimsql <- dimsqls[dimname]
+        dimsql <- dimsqls[[dimname]]
 
         print(paste("Building dimension:", dimname))
-        executeSql(conn, dimsql)
+        executeSql(conn, dimsql, progressBar = FALSE,
+                   reportOverallTime = FALSE)
 
         print("Downloading dimension data...")
         dim <- downloaddimension(conn, connectionDetails$dbms, cutoff)
         savedimension(datadir, dimname, dim)
     }
 
-    close(conn)
+    #close(conn)
 }
 
 
