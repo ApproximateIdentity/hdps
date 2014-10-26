@@ -1,2 +1,3 @@
 * Remove unnecessary returns.
 * Use dbSendQuery instead of executeSql since the timers are unused.
+* Move readfile to tutils
