@@ -1,3 +1,4 @@
 examples/covariates/
 examples/data/
 examples/data/dimensions/
+*.swp

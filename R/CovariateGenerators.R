@@ -1,5 +1,42 @@
-# TODO: Change 'build' to 'get' in function names. Change 'mapping' to 'map'.
 #' @export
+generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
+    # Build name record.
+    filepath <- file.path(datadir, "cohorts.csv")
+    cohorts <- fread(filepath)
+    nameRecord <- data.frame(new_id = 1:length(cohorts$person_id),
+                             old_id = cohorts$person_id)
+    cohorts$person_id <- nameRecord$new_id
+
+    # Save the name record.
+    filepath <- file.path(covariatesdir, "nameRecord.csv")
+    write.table(nameRecord, filepath, sep="\t", row.names=FALSE)
+
+    # Save the cohorts.
+    filepath <- file.path(covariatesdir, "cohorts.csv")
+    write.table(cohorts, filepath, sep="\t", row.names=FALSE)
+
+    # Build covariate record.
+    dimdir <- file.path(datadir, "dimensions")
+    filepaths <- list.files(dimdir, full.names=TRUE)
+    covariateRecord <- buildCovariateRecord(filepaths)
+    filepath <- file.path(covariatesdir, "covariateRecord.csv")
+    write.table(covariateRecord, file=filepath, sep="\t", row.names=FALSE)
+
+    # Build covariate and person mappings.
+    covariateMapping <- buildCovariateMapping(covariateRecord)
+    nameMapping <- nameRecord$new_id
+    names(nameMapping) <- nameRecord$old_id
+
+    # Next build covariates locally.
+    dimdir <- file.path(datadir, "dimensions")
+    filepaths <- list.files(dimdir, full.names=TRUE)
+    covariates <- extractCovariates(filepaths, nameMapping, covariateMapping)
+    # TODO: Why is this taking so long?
+    filepath <- file.path(covariatesdir, "covariates.csv")
+    write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
+}
+
+# TODO: Change 'build' to 'get' in function names. Change 'mapping' to 'map'.
 buildCovariateRecord <- function(filepaths) {
     # HACK: The initial row is necessary to avoid problems with the integer64
     # data type which result from built-in type coersions within R.
@@ -55,7 +92,6 @@ buildCovariateRecord <- function(filepaths) {
 }
 
 
-#' @export
 buildCovariateMapping <- function(covariateRecord) {
     covMapping <- covariateRecord$new_covariate
 
@@ -77,7 +113,6 @@ buildCovariateMapping <- function(covariateRecord) {
 
 # TODO: This should probably be combined with buildCovariateMapping so that all
 # files are not read through twice, but this is conceptually a little simpler.
-#' @export
 extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
     covariates <- data.frame()
 
@@ -129,6 +164,9 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
 
         new_covariates <- data.frame(person_id, covariate_id, covariate_value)
         covariates <- rbind(covariates, new_covariates)
+
+        msg <- paste("Done extracting covariates from dimension", dimName)
+        print(msg)
     }
 
     covariates

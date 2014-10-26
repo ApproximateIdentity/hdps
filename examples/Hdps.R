@@ -34,36 +34,7 @@ cohortDetails <- list(
     schema = "mslr_cdm4")
 
 generateDataFromSql(sqldir, datadir, connectionDetails, cohortDetails)
-
-# Build name record.
-filepath <- file.path(datadir, "cohorts.csv")
-cohorts <- fread(filepath)
-nameRecord <- data.frame(new_id = 1:length(cohorts$person_id),
-                         old_id = cohorts$person_id)
-cohorts$person_id <- nameRecord$new_id
-
-filepath <- file.path(covariatesdir, "nameRecord.csv")
-write.table(nameRecord, filepath, sep="\t", row.names=FALSE)
-
-filepath <- file.path(covariatesdir, "cohorts.csv")
-write.table(cohorts, filepath, sep="\t", row.names=FALSE)
-
-# Build covariate record.
-filepaths <- list.files(datadimdir, full.names=TRUE)
-covariateRecord <- buildCovariateRecord(filepaths)
-filepath <- file.path(covariatesdir, "covariateRecord.csv")
-write.table(covariateRecord, file=filepath, sep="\t", row.names=FALSE)
-
-# Build covariate and person mappings.
-covariateMapping <- buildCovariateMapping(covariateRecord)
-nameMapping <- nameRecord$new_id
-names(nameMapping) <- nameRecord$old_id
-
-# Next build covariates locally.
-filepaths <- list.files(datadimdir, full.names=TRUE)
-covariates <- extractCovariates(filepaths, nameMapping, covariateMapping)
-filepath <- file.path(covariatesdir, "covariates.csv")
-write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
+generateCovariatesFromData(datadir, covariatesdir)
 
 
 library(Cyclops)
