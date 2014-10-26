@@ -3,3 +3,4 @@
 * Move readfile to tutils
 * Make sure there is a cutoff in both generators and converters
 * Check if dependencies still hold
+* Remove quotes and row numbers from print statements
