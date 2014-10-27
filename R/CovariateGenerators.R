@@ -166,7 +166,7 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
         covariates <- rbind(covariates, new_covariates)
 
         msg <- sprintf("Done extracting covariates from dimension %s\n",
-                       dimname)
+                       dimName)
         cat(msg)
     }
 

@@ -39,7 +39,7 @@ generateDataFromSql(sqldir, datadir, connectionDetails, cohortDetails,
 generateCovariatesFromData(datadir, covariatesdir)
 
 # Run cyclops.
-sparseData <- loadSparseData(covariatesdir)
+sparseData <- getSparseData(covariatesdir)
 cyclopsData <- createCyclopsDataFrame(y = sparseData$y,
                                       sx = sparseData$X,
                                       modelType = "pr")
