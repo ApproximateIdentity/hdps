@@ -176,10 +176,10 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
 # TODO: Replace this with "median" function. For some reason using median
 # throws errors above.
 fiftiethPercentile <- function(numbers) {
-    return(quantile(numbers)[[3]])
+    quantile(numbers)[[3]]
 }
 
 
 seventyFifthPercentile <- function(numbers) {
-    return(quantile(numbers)[[4]])
+    quantile(numbers)[[4]]
 }

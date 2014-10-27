@@ -99,7 +99,7 @@ downloaddimension <- function(conn, dbms, cutoff) {
     sql <- translateSql(sql = sql, targetDialect = dbms)$sql
     executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
 
-    return(dim)
+    dim
 }
 
 
