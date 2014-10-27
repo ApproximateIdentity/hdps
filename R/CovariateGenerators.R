@@ -1,43 +1,38 @@
 #' @export
 generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
-    # Build name record.
-    filepath <- file.path(datadir, "cohorts.csv")
-    cohorts <- fread(filepath)
-    nameRecord <- data.frame(new_id = 1:length(cohorts$person_id),
-                             old_id = cohorts$person_id)
-    cohorts$person_id <- nameRecord$new_id
+    cohortRecord <- getCohortRecord(datadir)
+    saveCohortRecord(covariatesdir, cohortRecord)
 
-    # Save the name record.
-    filepath <- file.path(covariatesdir, "nameRecord.csv")
-    write.table(nameRecord, filepath, sep="\t", row.names=FALSE)
+    covariateRecord <- getCovariateRecord(datadir)
+    saveCovariateRecord(covariatesdir, covariateRecord)
 
-    # Save the cohorts.
-    filepath <- file.path(covariatesdir, "cohorts.csv")
-    write.table(cohorts, filepath, sep="\t", row.names=FALSE)
+    idMap <- getIdMap(cohortRecord)
+    covariateMap <- getCovariateMap(covariateRecord)
 
-    # Build covariate record.
-    dimdir <- file.path(datadir, "dimensions")
-    filepaths <- list.files(dimdir, full.names=TRUE)
-    covariateRecord <- buildCovariateRecord(filepaths)
-    filepath <- file.path(covariatesdir, "covariateRecord.csv")
-    write.table(covariateRecord, file=filepath, sep="\t", row.names=FALSE)
-
-    # Build covariate and person mappings.
-    covariateMapping <- buildCovariateMapping(covariateRecord)
-    nameMapping <- nameRecord$new_id
-    names(nameMapping) <- nameRecord$old_id
-
-    # Next build covariates locally.
-    dimdir <- file.path(datadir, "dimensions")
-    filepaths <- list.files(dimdir, full.names=TRUE)
-    covariates <- extractCovariates(filepaths, nameMapping, covariateMapping)
-    # TODO: Why is this taking so long?
-    filepath <- file.path(covariatesdir, "covariates.csv")
-    write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
+    covariates <- extractCovariates(datadir, idMap, covariateMap)
+    saveCovariates(covariatesdir, covariates)
 }
 
-# TODO: Change 'build' to 'get' in function names. Change 'mapping' to 'map'.
-buildCovariateRecord <- function(filepaths) {
+
+getCohortRecord <- function(datadir) {
+    filepath <- file.path(datadir, "cohorts.csv")
+    cohorts <- fread(filepath)
+    cohortRecord <- data.frame(new_id = 1:length(cohorts$person_id),
+                             old_id = cohorts$person_id,
+                             cohort_id = cohorts$cohort_id)
+    cohortRecord
+}
+
+
+saveCohortRecord <- function(covariatesdir, cohortRecord) {
+    filepath <- file.path(covariatesdir, "cohortRecord.csv")
+    write.table(cohortRecord, filepath, sep="\t", row.names=FALSE)
+}
+
+
+getCovariateRecord <- function(datadir) {
+    dimdir <- file.path(datadir, "dimensions")
+    filepaths <- list.files(dimdir, full.names=TRUE)
     # HACK: The initial row is necessary to avoid problems with the integer64
     # data type which result from built-in type coersions within R.
     covariateRecord <- data.frame(
@@ -92,7 +87,21 @@ buildCovariateRecord <- function(filepaths) {
 }
 
 
-buildCovariateMapping <- function(covariateRecord) {
+saveCovariateRecord <- function(covariatesdir, covariateRecord) {
+    filepath <- file.path(covariatesdir, "covariateRecord.csv")
+    write.table(covariateRecord, file=filepath, sep="\t", row.names=FALSE)
+}
+
+
+getIdMap <- function(cohortRecord) {
+    idMap <- cohortRecord$new_id
+    names(idMap) <- cohortRecord$old_id
+
+    idMap
+}
+
+
+getCovariateMap <- function(covariateRecord) {
     covMapping <- covariateRecord$new_covariate
 
     oldCov <- covariateRecord$old_covariate
@@ -111,11 +120,11 @@ buildCovariateMapping <- function(covariateRecord) {
 }
 
 
-# TODO: This should probably be combined with buildCovariateMapping so that all
-# files are not read through twice, but this is conceptually a little simpler.
-extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
+extractCovariates <- function(datadir, idMap, covariateMap) {
     covariates <- data.frame()
 
+    dimdir <- file.path(datadir, "dimensions")
+    filepaths <- list.files(dimdir, full.names=TRUE)
     for (filepath in filepaths) {
         dimName <- file_path_sans_ext(basename(filepath))
         dimData <- fread(filepath)
@@ -140,7 +149,7 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
 
             # Get converted person id.
             person <- row$person_id
-            person <- nameMapping[toString(person)]
+            person <- idMap[toString(person)]
 
             # Get converted covariate id.
             concept <- toString(row$concept_id)
@@ -153,7 +162,7 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
                 level <- "l"
             }
             key <- paste(dimName, concept, level, sep="")
-            covariate <- covariateMapping[key]
+            covariate <- covariateMap[key]
 
             person_id[length(person_id) + 1] <- person
             covariate_id[length(covariate_id) + 1] <- covariate
@@ -171,6 +180,12 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
     }
 
     covariates
+}
+
+
+saveCovariates <- function(covariatesdir, covariates) {
+    filepath <- file.path(covariatesdir, "covariates.csv")
+    write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
 }
 
 

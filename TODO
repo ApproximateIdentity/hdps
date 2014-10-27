@@ -1,5 +1,10 @@
 * Double-check that algorithm actually does what it's supposed to do
+    -- Drop covariate if fewer than 100 patients have it
+    -- Prioritize covariates and add dropping criterion
+* Change 'build' to 'get' in function names. Change 'mapping' to 'map'.
 * Add cutoff functionality to generateCovariatesFromData
 * Check if dependencies still hold
 * Write documentation
 * Add verbose option
+* Reorder functions to make more sense
+* Write in a pipelined way to speed things up
