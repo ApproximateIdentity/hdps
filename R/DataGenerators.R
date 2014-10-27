@@ -37,7 +37,7 @@ downloaddimension <- function(conn, dbms, cutoff) {
     ;
     "
     sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+    dbSendQuery(conn, sql)
 
 
     # Get cohort size.
@@ -68,8 +68,7 @@ downloaddimension <- function(conn, dbms, cutoff) {
     # TODO: This should use renderSql.
     sql = sprintf(sql, numpersons, cutoff)
     sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
-
+    dbSendQuery(conn, sql)
 
     sql = "
     SELECT
@@ -97,7 +96,7 @@ downloaddimension <- function(conn, dbms, cutoff) {
     ;
     "
     sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+    dbSendQuery(conn, sql)
 
     dim
 }
@@ -200,7 +199,7 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
         connectionDetails$schema)
 
     print("Building cohorts.")
-    executeSql(conn, cohortsql, progressBar = FALSE, reportOverallTime = FALSE)
+    dbSendQuery(conn, cohortsql)
 
     print("Downloading cohorts data.")
     cohorts <- downloadcohorts(conn, connectionDetails$dbms)
@@ -211,8 +210,7 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
         dimsql <- dimsqls[[dimname]]
 
         print(paste("Building dimension:", dimname))
-        executeSql(conn, dimsql, progressBar = FALSE,
-                   reportOverallTime = FALSE)
+        dbSendQuery(conn, dimsql)
 
         print("Downloading dimension data...")
         dim <- downloaddimension(conn, connectionDetails$dbms, cutoff)
