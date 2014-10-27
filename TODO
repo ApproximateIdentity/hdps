@@ -1,3 +1,5 @@
+* Double-check that algorithm actually does what it's supposed to do
 * Add cutoff functionality to generateCovariatesFromData
 * Check if dependencies still hold
 * Write documentation
+* Add verbose option
