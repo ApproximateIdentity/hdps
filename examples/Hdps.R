@@ -9,8 +9,10 @@ sqldir <- file.path(basedir, "sql")
 datadir <- file.path(basedir, "data")
 covariatesdir <- file.path(basedir, "covariates")
 
-# Build temporary directories if necessary.
-dir.create(file.path(datadir, "dimensions"),
+# Build output directories if necessary.
+dir.create(file.path(datadir, "dimensions", "required"),
+           showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(datadir, "dimensions", "optional"),
            showWarnings = FALSE, recursive = TRUE)
 dir.create(covariatesdir, showWarnings = FALSE, recursive = TRUE)
 
