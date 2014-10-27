@@ -120,26 +120,26 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
                                 cohortDetails, cutoff=NULL) {
     # Check that the directories and necessary files exist.
     if (!file.exists(sqldir) || !(file.info(sqldir)$isdir)) {
-        print(paste("Error: Directory", sqldir, "does not exist."))
+        cat(paste("Error: Directory ", sqldir, " does not exist.\n", sep=""))
         return(NULL)
     }
     if (!file.exists(datadir) || !(file.info(datadir)$isdir)) {
-        print(paste("Error: Directory", datadir, "does not exist."))
+        cat(paste("Error: Directory ", datadir, " does not exist.\n", sep=""))
         return(NULL)
     }
     cohortsfile <- file.path(sqldir, "BuildCohorts.sql")
     if (!file.exists(cohortsfile)) {
-        print(paste("Error: File", cohortsfile, "does not exist."))
+        cat(paste("Error: File ", cohortsfile, " does not exist.\n", sep=""))
         return(NULL)
     }
     dimdir <- file.path(sqldir, "dimensions")
     if (!file.exists(dimdir) || !(file.info(dimdir)$isdir)) {
-        print(paste("Error: Directory", dimdir, "does not exist."))
+        cat(paste("Error: Directory ", dimdir, " does not exist.\n", sep=""))
         return(NULL)
     }
     dimfiles <- list.files(dimdir, full.names=TRUE)
     if (length(dimfiles) == 0) {
-        print(paste("Error: No files found in", dimdir))
+        cat(paste("Error: No files found in ", dimdir, "\n", sep=""))
         return(NULL)
     }
     
@@ -198,10 +198,10 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
         connectionDetails$port,
         connectionDetails$schema)
 
-    print("Building cohorts.")
+    cat("Building cohorts.\n")
     dbSendQuery(conn, cohortsql)
 
-    print("Downloading cohorts data.")
+    cat("Downloading cohorts data.\n")
     cohorts <- downloadcohorts(conn, connectionDetails$dbms)
     savecohorts(datadir, cohorts)
 
@@ -209,10 +209,10 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
         dimname <- names(dimsqls)[i]
         dimsql <- dimsqls[[dimname]]
 
-        print(paste("Building dimension:", dimname))
+        cat(paste("Building dimension: ", dimname, "\n", sep=""))
         dbSendQuery(conn, dimsql)
 
-        print("Downloading dimension data...")
+        cat("Downloading dimension data...\n")
         dim <- downloaddimension(conn, connectionDetails$dbms, cutoff)
         savedimension(datadir, dimname, dim)
     }
