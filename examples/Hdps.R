@@ -34,7 +34,8 @@ cohortDetails <- list(
     indicator = MyocardialInfarction,
     schema = "mslr_cdm4")
 
-generateDataFromSql(sqldir, datadir, connectionDetails, cohortDetails)
+generateDataFromSql(sqldir, datadir, connectionDetails, cohortDetails,
+                    cutoff=100)
 generateCovariatesFromData(datadir, covariatesdir)
 
 # Run cyclops.
