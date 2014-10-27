@@ -9,8 +9,11 @@ generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
     idMap <- getIdMap(cohortRecord)
     covariateMap <- getCovariateMap(covariateRecord)
 
-    covariates <- extractAllCovariates(datadir, idMap, covariateMap)
-    saveAllCovariates(covariatesdir, covariates)
+    preCovariates <- extractPreCovariates(datadir, idMap, covariateMap)
+    savePreCovariates(covariatesdir, preCovariates)
+
+    covariates <- subsampleCovariates(preCovariates, covariateMap)
+    saveSampleCovariates(covariatesdir, covariates)
 }
 
 
@@ -31,8 +34,6 @@ saveCohortRecord <- function(covariatesdir, cohortRecord) {
 
 
 getCovariateRecord <- function(datadir) {
-    dimdir <- file.path(datadir, "dimensions")
-    filepaths <- list.files(dimdir, full.names=TRUE)
     # HACK: The initial row is necessary to avoid problems with the integer64
     # data type which result from built-in type coersions within R.
     covariateRecord <- data.frame(
@@ -40,9 +41,15 @@ getCovariateRecord <- function(datadir) {
         old_covariate = as.integer64.character('0'),
         level = "",
         dim = "",
+        required = FALSE,
         stringsAsFactors = FALSE)
 
-    for (filepath in filepaths) {
+    reqdir <- file.path(datadir, "dimensions", "required")
+    optdir <- file.path(datadir, "dimensions", "optional")
+    reqpaths <- list.files(reqdir, full.names=TRUE)
+    optpaths <- list.files(optdir, full.names=TRUE)
+    for (filepath in c(reqpaths, optpaths)) {
+        required <- (filepath %in% reqpaths)
         dimName <- file_path_sans_ext(basename(filepath))
 
         oldCov <- unique(fread(filepath)$concept_id)
@@ -54,6 +61,9 @@ getCovariateRecord <- function(datadir) {
 
         # Replicate the dimName to fit the column of the data frame.
         dimNames <- rep(dimName, numOldCov * 3)
+
+        # Replicate the required to fit the column of the data frame.
+        required <- rep(required, numOldCov * 3)
         
         # The shift of '- 1' on the right is necessary because the initial
         # extra row added to the data frame in the hack above.
@@ -74,7 +84,8 @@ getCovariateRecord <- function(datadir) {
             new_covariate = newCov,
             old_covariate = oldCov,
             level = level,
-            dim = dimNames)
+            dim = dimNames,
+            required = required)
 
         covariateRecord <- rbind(covariateRecord, newCovariateRecord)
     }
@@ -120,12 +131,14 @@ getCovariateMap <- function(covariateRecord) {
 }
 
 
-extractAllCovariates <- function(datadir, idMap, covariateMap) {
-    covariates <- data.frame()
+extractPreCovariates <- function(datadir, idMap, covariateMap) {
+    preCovariates <- data.frame()
 
-    dimdir <- file.path(datadir, "dimensions")
-    filepaths <- list.files(dimdir, full.names=TRUE)
-    for (filepath in filepaths) {
+    reqdir <- file.path(datadir, "dimensions", "required")
+    optdir <- file.path(datadir, "dimensions", "optional")
+    reqpaths <- list.files(reqdir, full.names=TRUE)
+    optpaths <- list.files(optdir, full.names=TRUE)
+    for (filepath in c(reqpaths, optpaths)) {
         dimName <- file_path_sans_ext(basename(filepath))
         dimData <- fread(filepath)
 
@@ -172,18 +185,28 @@ extractAllCovariates <- function(datadir, idMap, covariateMap) {
         covariate_value = rep(1, length(person_id))
 
         new_covariates <- data.frame(person_id, covariate_id, covariate_value)
-        covariates <- rbind(covariates, new_covariates)
+        preCovariates <- rbind(preCovariates, new_covariates)
 
         msg <- sprintf("Done extracting covariates from dimension %s\n",
                        dimName)
         cat(msg)
     }
 
-    covariates
+    preCovariates
 }
 
 
-saveAllCovariates <- function(covariatesdir, covariates) {
+savePreCovariates <- function(covariatesdir, preCovariates) {
+    filepath <- file.path(covariatesdir, "precovariates.csv")
+    write.table(preCovariates, file=filepath, sep="\t", row.names=FALSE)
+}
+
+
+subsampleCovariates <- function(covariates, covariateMap) {
+    covariates
+}
+
+saveSampleCovariates <- function(covariatesdir, covariates) {
     filepath <- file.path(covariatesdir, "covariates.csv")
     write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
 }

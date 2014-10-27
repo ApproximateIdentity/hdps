@@ -115,7 +115,6 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
     for (i in 1:length(dimsqls)) {
         dimname <- names(dimsqls)[i]
         dimsql <- dimsqls[[dimname]]
-        isRequired <- required[[dimname]]
 
         msg <- sprintf("Building dimension: %s\n", dimname)
         cat(msg)
@@ -124,7 +123,7 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
 
         cat("Downloading dimension data...\n")
         dim <- downloaddimension(conn, connectionDetails$dbms, cutoff)
-        savedimension(datadir, dimname, dim, isRequired)
+        savedimension(datadir, dimname, dim, required[[dimname]])
     }
 
     dummy <- dbDisconnect(conn)
@@ -241,9 +240,9 @@ savecohorts <- function(datadir, cohorts) {
 }
 
 
-savedimension <- function(datadir, dimname, dim, isRequired) {
+savedimension <- function(datadir, dimname, dim, required) {
     filename <- paste(dimname, ".csv", sep="")
-    if (isRequired) {
+    if (required) {
         outdir <- file.path(datadir, "dimensions", "required")
     } else {
         outdir <- file.path(datadir, "dimensions", "optional")
