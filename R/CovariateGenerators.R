@@ -165,10 +165,8 @@ extractCovariates <- function(filepaths, nameMapping, covariateMapping) {
         new_covariates <- data.frame(person_id, covariate_id, covariate_value)
         covariates <- rbind(covariates, new_covariates)
 
-        msg <- paste("Done extracting covariates from dimension ",
-                     dimName,
-                     "\n",
-                     sep="")
+        msg <- sprintf("Done extracting covariates from dimension %s\n",
+                       dimname)
         cat(msg)
     }
 

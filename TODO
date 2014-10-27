@@ -1,4 +1,3 @@
 * Make sure there is a cutoff in both generators and converters
 * Check if dependencies still hold
-* Use sprintf instead of paste
 * Write documentation

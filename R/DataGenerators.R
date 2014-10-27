@@ -120,26 +120,31 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
                                 cohortDetails, cutoff=NULL) {
     # Check that the directories and necessary files exist.
     if (!file.exists(sqldir) || !(file.info(sqldir)$isdir)) {
-        cat(paste("Error: Directory ", sqldir, " does not exist.\n", sep=""))
+        msg <- sprintf("Error: Directory %s does not exist.\n", sqldir)
+        cat(msg)
         return(NULL)
     }
     if (!file.exists(datadir) || !(file.info(datadir)$isdir)) {
-        cat(paste("Error: Directory ", datadir, " does not exist.\n", sep=""))
+        msg <- sprintf("Error: Directory %s does not exist.\n", datadir)
+        cat(msg)
         return(NULL)
     }
     cohortsfile <- file.path(sqldir, "BuildCohorts.sql")
     if (!file.exists(cohortsfile)) {
-        cat(paste("Error: File ", cohortsfile, " does not exist.\n", sep=""))
+        msg <- sprintf("Error: File %s does not exist.\n", cohortsfile)
+        cat(msg)
         return(NULL)
     }
     dimdir <- file.path(sqldir, "dimensions")
     if (!file.exists(dimdir) || !(file.info(dimdir)$isdir)) {
-        cat(paste("Error: Directory ", dimdir, " does not exist.\n", sep=""))
+        msg <- sprintf("Error: Directory %s does not exist.\n", dimdir)
+        cat(msg)
         return(NULL)
     }
     dimfiles <- list.files(dimdir, full.names=TRUE)
     if (length(dimfiles) == 0) {
-        cat(paste("Error: No files found in ", dimdir, "\n", sep=""))
+        msg <- sprintf("Error: No files found in %s\n", dimdir)
+        cat(msg)
         return(NULL)
     }
     
@@ -209,7 +214,8 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
         dimname <- names(dimsqls)[i]
         dimsql <- dimsqls[[dimname]]
 
-        cat(paste("Building dimension: ", dimname, "\n", sep=""))
+        msg <- sprintf("Building dimension: %s\n", dimname)
+        cat(msg)
         dbSendQuery(conn, dimsql)
 
         cat("Downloading dimension data...\n")
