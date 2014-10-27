@@ -9,8 +9,8 @@ generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
     idMap <- getIdMap(cohortRecord)
     covariateMap <- getCovariateMap(covariateRecord)
 
-    covariates <- extractCovariates(datadir, idMap, covariateMap)
-    saveCovariates(covariatesdir, covariates)
+    covariates <- extractAllCovariates(datadir, idMap, covariateMap)
+    saveAllCovariates(covariatesdir, covariates)
 }
 
 
@@ -120,7 +120,7 @@ getCovariateMap <- function(covariateRecord) {
 }
 
 
-extractCovariates <- function(datadir, idMap, covariateMap) {
+extractAllCovariates <- function(datadir, idMap, covariateMap) {
     covariates <- data.frame()
 
     dimdir <- file.path(datadir, "dimensions")
@@ -183,7 +183,7 @@ extractCovariates <- function(datadir, idMap, covariateMap) {
 }
 
 
-saveCovariates <- function(covariatesdir, covariates) {
+saveAllCovariates <- function(covariatesdir, covariates) {
     filepath <- file.path(covariatesdir, "covariates.csv")
     write.table(covariates, file=filepath, sep="\t", row.names=FALSE)
 }

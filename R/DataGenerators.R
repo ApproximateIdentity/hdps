@@ -1,3 +1,136 @@
+#' @export
+generateDataFromSql <- function(sqldir, datadir, connectionDetails,
+                                cohortDetails, cutoff=NULL) {
+    # Check that the directories and necessary files exist.
+    if (!file.exists(sqldir) || !(file.info(sqldir)$isdir)) {
+        msg <- sprintf("Error: Directory %s does not exist.\n", sqldir)
+        cat(msg)
+        return(NULL)
+    }
+    if (!file.exists(datadir) || !(file.info(datadir)$isdir)) {
+        msg <- sprintf("Error: Directory %s does not exist.\n", datadir)
+        cat(msg)
+        return(NULL)
+    }
+    cohortsfile <- file.path(sqldir, "BuildCohorts.sql")
+    if (!file.exists(cohortsfile)) {
+        msg <- sprintf("Error: File %s does not exist.\n", cohortsfile)
+        cat(msg)
+        return(NULL)
+    }
+    dimdir <- file.path(sqldir, "dimensions")
+    if (!file.exists(dimdir) || !(file.info(dimdir)$isdir)) {
+        msg <- sprintf("Error: Directory %s does not exist.\n", dimdir)
+        cat(msg)
+        return(NULL)
+    }
+    reqdir <- file.path(dimdir, "required")
+    if (!file.exists(reqdir) || !(file.info(reqdir)$isdir)) {
+        msg <- sprintf("Error: Directory %s does not exist.\n", reqdir)
+        cat(msg)
+        return(NULL)
+    }
+    optdir <- file.path(dimdir, "optional")
+    if (!file.exists(optdir) || !(file.info(optdir)$isdir)) {
+        msg <- sprintf("Error: Directory %s does not exist.\n", optdir)
+        cat(msg)
+        return(NULL)
+    }
+    reqfiles <- list.files(reqdir, full.names=TRUE)
+    optfiles <- list.files(optdir, full.names=TRUE)
+    if ((length(reqfiles) == 0) && (length(optfiles) == 0)) {
+        msg <- sprintf("Error: No files found in either %s or %s\n",
+                       reqdir, optdir)
+        cat(msg)
+        return(NULL)
+    }
+    
+    # TODO: Move somewhere global.
+    defaultCohortDetails <- list(
+        washoutWindow=183,
+        indicationLookbackWindow=183,
+        studyStartDate="",
+        studyEndDate="",
+        exclusionConceptIds = c(4027133, 4032243, 4146536, 2002282, 2213572,
+                                2005890, 43534760, 21601019),
+        exposureTable="DRUG_ERA")
+
+    # Fill in missing cohortDetails with defaults.
+    for (i in 1:length(defaultCohortDetails)) {
+        key <- names(defaultCohortDetails)[i]
+        value <- defaultCohortDetails[key]
+        if (is.null(cohortDetails[key][[1]])) {
+            cohortDetails[key] = value
+        }
+    }
+
+    # Build cohort sql.
+    cohortsql <- readfile(cohortsfile)
+    cohortsql <- renderSql(
+        sql = cohortsql,
+        cdm_schema=cohortDetails$schema,
+        results_schema=cohortDetails$schema,
+        target_drug_concept_id=cohortDetails$drugA,
+        comparator_drug_concept_id=cohortDetails$drugB,
+        indication_concept_ids=cohortDetails$indicator,
+        washout_window=cohortDetails$washoutWindow,
+        indication_lookback_window=cohortDetails$indicationLookbackWindow,
+        study_start_date=cohortDetails$studyStartDate,
+        study_end_date=cohortDetails$studyEndDate,
+        exclusion_concept_ids=cohortDetails$exclusionConceptIds,
+        exposure_table=cohortDetails$exposureTable)$sql
+    cohortsql <- translateSql(sql = cohortsql,
+                              sourceDialect = "sql server",
+                              targetDialect = connectionDetails$dbms)$sql
+
+    dimsqls <- list()
+    required <- list()
+    # TODO: Change so that this uses correct output dir depending on whether it
+    # is required or not.
+    dimfiles <- c(reqfiles, optfiles)
+    for (dimpath in dimfiles) {
+        dimname <- file_path_sans_ext(basename(dimpath))
+        dimsql <- readfile(dimpath)
+        dimsql <- translateSql(sql = dimsql,
+                               targetDialect = connectionDetails$dbms)$sql
+        dimsqls[dimname] <- dimsql
+        required[dimname] <- (dimpath %in% reqfiles)
+    }
+
+    conn <- connect(
+        dbms=connectionDetails$dbms,
+        connectionDetails$user,
+        connectionDetails$password,
+        connectionDetails$server,
+        connectionDetails$port,
+        connectionDetails$schema)
+
+    cat("Building cohorts.\n")
+    executeSql(conn, cohortsql, progressBar = FALSE, reportOverallTime = FALSE)
+
+    cat("Downloading cohorts data.\n")
+    cohorts <- downloadcohorts(conn, connectionDetails$dbms)
+    savecohorts(datadir, cohorts)
+
+    for (i in 1:length(dimsqls)) {
+        dimname <- names(dimsqls)[i]
+        dimsql <- dimsqls[[dimname]]
+        isRequired <- required[[dimname]]
+
+        msg <- sprintf("Building dimension: %s\n", dimname)
+        cat(msg)
+        executeSql(conn, dimsql, progressBar = FALSE,
+                   reportOverallTime = FALSE)
+
+        cat("Downloading dimension data...\n")
+        dim <- downloaddimension(conn, connectionDetails$dbms, cutoff)
+        savedimension(datadir, dimname, dim, isRequired)
+    }
+
+    dummy <- dbDisconnect(conn)
+}
+
+
 downloadcohorts <- function(conn, dbms) {
     sql <- "
     SELECT
@@ -108,121 +241,13 @@ savecohorts <- function(datadir, cohorts) {
 }
 
 
-savedimension <- function(datadir, dimname, dim) {
+savedimension <- function(datadir, dimname, dim, isRequired) {
     filename <- paste(dimname, ".csv", sep="")
-    filepath <- file.path(datadir, "dimensions", filename)
+    if (isRequired) {
+        outdir <- file.path(datadir, "dimensions", "required")
+    } else {
+        outdir <- file.path(datadir, "dimensions", "optional")
+    }
+    filepath <- file.path(outdir, filename)
     write.table(dim, file=filepath, sep="\t", row.names=FALSE)
-}
-
-
-#' @export
-generateDataFromSql <- function(sqldir, datadir, connectionDetails,
-                                cohortDetails, cutoff=NULL) {
-    # Check that the directories and necessary files exist.
-    if (!file.exists(sqldir) || !(file.info(sqldir)$isdir)) {
-        msg <- sprintf("Error: Directory %s does not exist.\n", sqldir)
-        cat(msg)
-        return(NULL)
-    }
-    if (!file.exists(datadir) || !(file.info(datadir)$isdir)) {
-        msg <- sprintf("Error: Directory %s does not exist.\n", datadir)
-        cat(msg)
-        return(NULL)
-    }
-    cohortsfile <- file.path(sqldir, "BuildCohorts.sql")
-    if (!file.exists(cohortsfile)) {
-        msg <- sprintf("Error: File %s does not exist.\n", cohortsfile)
-        cat(msg)
-        return(NULL)
-    }
-    dimdir <- file.path(sqldir, "dimensions")
-    if (!file.exists(dimdir) || !(file.info(dimdir)$isdir)) {
-        msg <- sprintf("Error: Directory %s does not exist.\n", dimdir)
-        cat(msg)
-        return(NULL)
-    }
-    dimfiles <- list.files(dimdir, full.names=TRUE)
-    if (length(dimfiles) == 0) {
-        msg <- sprintf("Error: No files found in %s\n", dimdir)
-        cat(msg)
-        return(NULL)
-    }
-    
-    # TODO: Move somewhere global.
-    defaultCohortDetails <- list(
-        washoutWindow=183,
-        indicationLookbackWindow=183,
-        studyStartDate="",
-        studyEndDate="",
-        exclusionConceptIds = c(4027133, 4032243, 4146536, 2002282, 2213572,
-                                2005890, 43534760, 21601019),
-        exposureTable="DRUG_ERA")
-
-    # Fill in missing cohortDetails with defaults.
-    for (i in 1:length(defaultCohortDetails)) {
-        key <- names(defaultCohortDetails)[i]
-        value <- defaultCohortDetails[key]
-        if (is.null(cohortDetails[key][[1]])) {
-            cohortDetails[key] = value
-        }
-    }
-
-    # Build cohort sql.
-    cohortsql <- readfile(cohortsfile)
-    cohortsql <- renderSql(
-        sql = cohortsql,
-        cdm_schema=cohortDetails$schema,
-        results_schema=cohortDetails$schema,
-        target_drug_concept_id=cohortDetails$drugA,
-        comparator_drug_concept_id=cohortDetails$drugB,
-        indication_concept_ids=cohortDetails$indicator,
-        washout_window=cohortDetails$washoutWindow,
-        indication_lookback_window=cohortDetails$indicationLookbackWindow,
-        study_start_date=cohortDetails$studyStartDate,
-        study_end_date=cohortDetails$studyEndDate,
-        exclusion_concept_ids=cohortDetails$exclusionConceptIds,
-        exposure_table=cohortDetails$exposureTable)$sql
-    cohortsql <- translateSql(sql = cohortsql,
-                              sourceDialect = "sql server",
-                              targetDialect = connectionDetails$dbms)$sql
-
-    dimsqls <- list()
-    for (dimpath in dimfiles) {
-        dimname <- file_path_sans_ext(basename(dimpath))
-        dimsql <- readfile(dimpath)
-        dimsql <- translateSql(sql = dimsql,
-                               targetDialect = connectionDetails$dbms)$sql
-        dimsqls[dimname] <- dimsql
-    }
-
-    conn <- connect(
-        dbms=connectionDetails$dbms,
-        connectionDetails$user,
-        connectionDetails$password,
-        connectionDetails$server,
-        connectionDetails$port,
-        connectionDetails$schema)
-
-    cat("Building cohorts.\n")
-    executeSql(conn, cohortsql, progressBar = FALSE, reportOverallTime = FALSE)
-
-    cat("Downloading cohorts data.\n")
-    cohorts <- downloadcohorts(conn, connectionDetails$dbms)
-    savecohorts(datadir, cohorts)
-
-    for (i in 1:length(dimsqls)) {
-        dimname <- names(dimsqls)[i]
-        dimsql <- dimsqls[[dimname]]
-
-        msg <- sprintf("Building dimension: %s\n", dimname)
-        cat(msg)
-        executeSql(conn, dimsql, progressBar = FALSE,
-                   reportOverallTime = FALSE)
-
-        cat("Downloading dimension data...\n")
-        dim <- downloaddimension(conn, connectionDetails$dbms, cutoff)
-        savedimension(datadir, dimname, dim)
-    }
-
-    dummy <- dbDisconnect(conn)
 }

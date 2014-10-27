@@ -8,3 +8,5 @@
 * Add verbose option
 * Reorder functions to make more sense
 * Write in a pipelined way to speed things up
+* Do error checking at beginning of covariateGeneration
+* Change the dimension sql files to use sql render.
