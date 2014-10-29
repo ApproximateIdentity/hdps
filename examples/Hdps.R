@@ -38,7 +38,7 @@ cohortDetails <- list(
 
 generateDataFromSql(sqldir, datadir, connectionDetails, cohortDetails,
                     cutoff=100)
-generateCovariatesFromData(datadir, covariatesdir)
+generateCovariatesFromData(datadir, covariatesdir, cutoff = 100)
 
 # Run cyclops.
 sparseData <- getSparseData(covariatesdir)
