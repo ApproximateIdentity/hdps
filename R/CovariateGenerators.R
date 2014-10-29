@@ -19,17 +19,38 @@ generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
 
 getCohortRecord <- function(datadir) {
     filepath <- file.path(datadir, "cohorts.csv")
-    cohorts <- fread(filepath)
-    cohortRecord <- data.frame(new_id = 1:length(cohorts$person_id),
-                             old_id = cohorts$person_id,
-                             cohort_id = cohorts$cohort_id)
-    cohortRecord
+    f <- file(filepath)
+    lines <- readLines(f)
+    close(f)
+
+    # Produce record.
+    record <- list()
+    newheader <- c("new_id", "old_id", "cohort_id", "outcome_id")
+    record[[1]] <- newheader
+    # Skip the old header.
+    for (i in 2:length(lines)) {
+        newid <- i - 1
+        line <- lines[i]
+        row <- strsplit(line, '\t')[[1]]
+        cohort_id <- sample(0:1, 1)
+        row <- c(newid, row, cohort_id)
+        record[[length(record) + 1]] <- row
+    }
+    head(record)
 }
 
 
 saveCohortRecord <- function(covariatesdir, cohortRecord) {
-    filepath <- file.path(covariatesdir, "cohortRecord.csv")
-    write.table(cohortRecord, filepath, sep="\t", row.names=FALSE)
+    outlines <- c()
+    for (line in cohortRecord) {
+        line <- paste(line, collapse="\t")
+        outlines[[length(outlines) + 1]] <- line
+    }
+
+    outfilepath <- file.path(covariatesdir, "cohortRecord.csv")
+    outfile <- file(outfilepath)
+    writeLines(outlines, outfile)
+    close(outfile)
 }
 
 
