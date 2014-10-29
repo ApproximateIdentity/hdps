@@ -12,3 +12,4 @@
 * Change the dimension sql files to use sql render.
 * Make names of functions match names in paper
 * Use dbSendQuery plus fetch (or whatever it's called) to avoid dataframe
+* Do cutoff within each dimension
