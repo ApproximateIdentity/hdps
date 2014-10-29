@@ -1,6 +1,6 @@
 #' @export
 generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
-    convertData(datadir, covariatedir, cutoff = NULL)
+    convertData(datadir, covariatedir, cutoff = 100)
 
     #covariates <- subsampleCovariates(preCovariates, covariateMap)
     #saveSampleCovariates(covariatesdir, covariates)
@@ -10,7 +10,7 @@ generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
 EOF <- character(0)
 
 
-convertData <- function(datadir, covariatedir) {
+convertData <- function(datadir, covariatedir, cutoff = NULL) {
     pidMap <- convertPersons(datadir, covariatedir)
     convertCovariates(datadir, covariatedir, pidMap, cutoff)
 }
@@ -71,6 +71,11 @@ convertPersons <- function(datadir, covariatedir) {
 
 
 convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
+    if (is.null(cutoff)) {
+        # Infinity.
+        cutoff = 1e10
+    }
+
     covMap <- list()
     
     reqoutfilepath <- file.path(covariatesdir, "requiredcovariates.csv")
@@ -84,8 +89,8 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
     optpaths <- list.files(optdir, full.names=TRUE)
 
     # Write header.
-    header <- sprintf("%s\t%s\t%s\t%s", "person_id", "covariate_id",
-                      "covariate_value", "required")
+    header <- sprintf("%s\t%s\t%s", "person_id", "covariate_id",
+                      "covariate_value")
     writeLines(header, reqoutfile)
     writeLines(header, optoutfile)
 
@@ -122,11 +127,13 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
 
         midvals <- list()
         highvals <- list()
+        numvals <- list()
         for (i in 1:length(oldcovvalues)) {
             oldcovid <- names(oldcovvalues)[i]
             values <- sort(oldcovvalues[[oldcovid]])
 
             len <- length(values)
+            numvals[[oldcovid]] <- sum(values)
 
             # TODO: Make this use correct median and 75 percentile functions.
             midval <- values[ceiling(len/2)]
@@ -148,12 +155,25 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
             new_covariate_id <- new_covariate_id + 1
         }
 
+        # Get list of covariates to keep or cutoff.
+        numvals <- numvals[order(unlist(numvals), decreasing = TRUE)]
+        covstokeep <- list()
+        for (i in 1:length(numvals)) {
+            covid <- names(numvals)[i]
+            covstokeep[[covid]] <- (i <= cutoff)
+        }
+
         # Write out the covariates.
         for (line in lines) {
             row <- strsplit(line, '\t')[[1]]
             oldpid <- row[[1]]
             oldcovid <- row[[2]]
             oldcovvalue <- as.integer(row[[3]])
+
+            # Do not write out covariates lower than the cutoff.
+            if (!required && !covstokeep[[oldcovid]]) {
+                next
+            }
 
             newpid <- pidMap[[oldpid]]
 
@@ -169,8 +189,7 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
             
             newcovval <- 1
 
-            line <- sprintf("%s\t%s\t%s\t%s", newpid, newcovid, newcovval,
-                            required)
+            line <- sprintf("%s\t%s\t%s", newpid, newcovid, newcovval)
             writeLines(line, outfile)
         }
     }
