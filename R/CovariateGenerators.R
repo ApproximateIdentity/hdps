@@ -10,7 +10,14 @@ EOF <- character(0)
 
 
 convertData <- function(datadir, covariatedir, cutoff) {
-    pidMap <- convertPersons(datadir, covariatedir)
+
+    cat("Converting cohorts\n")
+    pidMap <- convertCohorts(datadir, covariatedir)
+
+    cat("Converting outcomes\n")
+    convertOutcomes(datadir, covariatedir, pidMap)
+
+    cat("Converting covariates\n")
     convertCovariates(datadir, covariatedir, pidMap, cutoff)
 }
 
@@ -19,24 +26,51 @@ extractCovariates <- function(covariatedir) {
 }
 
 
-convertPersons <- function(datadir, covariatedir) {
+convertOutcomes <- function(datadir, covariatedir, pidMap) {
+    # Needs to be fixed!
+    infilepath <- file.path(datadir, "outcomes.csv")
+    infile <- file(infilepath, "r")
+
+    outfilepath <- file.path(covariatesdir, "outcomes.csv")
+    outfile <- file(outfilepath, "w")
+
+    # Take care of headers.
+    readLines(infile, n = 1)
+    writeLines("new_person_id\toutcome_id", outfile)
+
+    line <- readLines(infile, n = 1)
+    while (!identical(line, EOF)) {
+        row <- strsplit(line, '\t')[[1]]
+        old_person_id <- row[1]
+        outcome_id <- row[2]
+        new_person_id <- pidMap[[old_person_id]]
+
+        outline <- sprintf("%s\t%s", new_person_id, outcome_id)
+        writeLines(outline, outfile)
+
+        line <- readLines(infile, n = 1)
+    }
+    
+    
+    close(outfile)
+    close(infile)
+}
+
+
+convertCohorts <- function(datadir, covariatedir) {
     pidMap <- list()
 
     filepath <- file.path(datadir, "cohorts.csv")
     infile <- file(filepath, "r")
-    outfilepath <- file.path(covariatesdir, "persons.csv")
+    outfilepath <- file.path(covariatesdir, "cohorts.csv")
     outfile <- file(outfilepath, "w")
 
     # Skip old header.
     readLines(infile, n = 1)
 
     # Write out new header.
-    header <- sprintf("%s\t%s\t%s", "new_person_id", "cohort_id",
-                      "outcome_id")
+    header <- sprintf("%s\t%s", "new_person_id", "cohort_id")
     writeLines(header, outfile)
-
-    # TODO: Make this use actual data later.
-    outcome_id <- 0
 
     new_person_id <- 1
     line <- readLines(infile, n = 1)
@@ -44,7 +78,7 @@ convertPersons <- function(datadir, covariatedir) {
         row <- strsplit(line, '\t')[[1]]
         old_person_id <- row[1]
         cohort_id <- row[2]
-        outline <- sprintf("%s\t%s\t%s", new_person_id, cohort_id, outcome_id)
+        outline <- sprintf("%s\t%s", new_person_id, cohort_id)
         writeLines(outline, outfile)
 
         pidMap[[old_person_id]] <- toString(new_person_id)
@@ -96,9 +130,12 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
     writeLines(header, reqoutfile)
     writeLines(header, optoutfile)
 
+    timer <- Timer$new()
     new_covariate_id <- 1
     for (infilepath in c(reqpaths, optpaths)) {
         dimname <- file_path_sans_ext(basename(infilepath))
+        cat(sprintf("Converting dimension %s\n", dimname))
+
         required <- (infilepath %in% reqpaths)
         if (required) {
             outfile <- reqoutfile
@@ -112,19 +149,29 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
         lines <- readLines(infile)
         close(infile)
 
+        #oldcovids <- list()
+        oldcovids <- c()
+        for (line in lines) {
+            row <- strsplit(line, '\t')[[1]]
+            oldcovid <- row[[2]]
+            #oldcovids[length(oldcovids) + 1] <- oldcovid
+            oldcovids <- append(oldcovids, oldcovid)
+        }
+        oldcovids <- unique(oldcovids)
+        
         oldcovvalues <- list()
+        for (oldcovid in oldcovids) {
+            oldcovvalues[[oldcovid]] <- numeric(0)
+        }
+
         for (line in lines) {
             row <- strsplit(line, '\t')[[1]]
             oldpid <- row[[1]]
             oldcovid <- row[[2]]
             oldcovvalue <- as.integer(row[[3]])
 
-            if (is.null(oldcovvalues[[oldcovid]])) {
-                oldcovvalues[[oldcovid]] <- c(oldcovvalue)
-            } else {
-                newpos <- length(oldcovvalues[[oldcovid]]) + 1
-                oldcovvalues[[oldcovid]][[newpos]] <- oldcovvalue
-            }
+            previousvals <- oldcovvalues[[oldcovid]]
+            oldcovvalues[[oldcovid]] <- append(previousvals, oldcovvalue)
         }
 
         midvals <- list()
@@ -194,6 +241,7 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
             line <- sprintf("%s\t%s\t%s", newpid, newcovid, newcovval)
             writeLines(line, outfile)
         }
+        print(timer$split())
     }
 
     close(reqoutfile)
@@ -205,7 +253,7 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
     writeLines("new_covariate_id\told_covariate_id", outfile)
     for (i in 1:length(covMap)) {
         oldcovid <- names(covMap)[i]
-        newcovid <- pidMap[[oldcovid]]
+        newcovid <- covMap[[oldcovid]]
         line <- sprintf("%s\t%s", newcovid, oldcovid)
         writeLines(line, outfile)
     }

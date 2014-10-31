@@ -112,6 +112,14 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
     cohorts <- downloadcohorts(conn, connectionDetails$dbms)
     savecohorts(datadir, cohorts)
 
+    cat("Building outcomes data.\n")
+    outcomessql <- ""
+    buildFakeOutcomes(conn, outcomesql)
+
+    cat("Downloading outcomes data.\n")
+    outcomes <- downloadoutcomes(conn, connectionDetails$dbms)
+    saveFakeOutcomes(datadir, outcomes)
+
     for (i in 1:length(dimsqls)) {
         dimname <- names(dimsqls)[i]
         dimsql <- dimsqls[[dimname]]
@@ -127,6 +135,49 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
     }
 
     dummy <- dbDisconnect(conn)
+}
+
+
+buildFakeOutcomes <- function(conn, outcomesql) {
+    NULL
+}
+
+downloadoutcomes <- function(conn, dbms) {
+    outcomes <- NULL
+
+    outcomes
+}
+
+# TODO: Put somewhere global. Possibly write eof function.
+EOF <- character(0)
+
+saveFakeOutcomes <- function(datadir, outcomes) {
+    # Needs to be fixed!
+    infilepath <- file.path(datadir, "cohorts.csv")
+    infile <- file(infilepath, "r")
+
+    outfilepath <- file.path(datadir, "outcomes.csv")
+    outfile <- file(outfilepath, "w")
+
+    # Take care of headers.
+    readLines(infile, n = 1)
+    writeLines("person_id\toutcome_id", outfile)
+
+    line <- readLines(infile, n = 1)
+    while (!identical(line, EOF)) {
+        row <- strsplit(line, '\t')[[1]]
+        person_id <- row[1]
+        outcome_id <- sample(0:1, 1)
+
+        outline <- sprintf("%s\t%s", person_id, outcome_id)
+        writeLines(outline, outfile)
+
+        line <- readLines(infile, n = 1)
+    }
+    
+    
+    close(outfile)
+    close(infile)
 }
 
 

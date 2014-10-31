@@ -13,3 +13,5 @@
 * Make names of functions match names in paper
 * Use dbSendQuery plus fetch (or whatever it's called) to avoid dataframe
 * Do cutoff within each dimension
+* Change cohorts to persons in data generators
+* Check code for inconsistencies in naming 'covariatesdir' vs 'covariatedir'
