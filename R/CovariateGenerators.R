@@ -131,7 +131,7 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
     writeLines(header, optoutfile)
 
     timer <- Timer$new()
-    new_covariate_id <- 1
+    newcovid <- 1
     for (infilepath in c(reqpaths, optpaths)) {
         dimname <- file_path_sans_ext(basename(infilepath))
         cat(sprintf("Converting dimension %s\n", dimname))
@@ -144,87 +144,43 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
         }
 
         infile <- file(infilepath, "r")
+
         # Drop header.
-        readLines(infile, n = 1)
-        lines <- readLines(infile)
-        close(infile)
+        #readLines(infile, n = 1)
+        #lines <- readLines(infile)
+        #close(infile)
 
-        #oldcovids <- list()
-        oldcovids <- c()
-        for (line in lines) {
-            row <- strsplit(line, '\t')[[1]]
-            oldcovid <- row[[2]]
-            #oldcovids[length(oldcovids) + 1] <- oldcovid
-            oldcovids <- append(oldcovids, oldcovid)
-        }
-        oldcovids <- unique(oldcovids)
-        
-        oldcovvalues <- list()
+        # TODO: Value should be called "covariate_value".
+        data <- read.csv(infilepath, sep = "\t",
+                         col.names = c("person_id", "covariate_id", "value"),
+                         colClasses = c(person_id="character",
+                         covariate_id="character", value="numeric"))
+
+        oldcovids <- unique(data$covariate_id)
+        oldcovvalues <- split(data$value, data$covariate_id)
+
+        midvals <- lapply(oldcovvalues, median)
+        highvals <- lapply(oldcovvalues, seventyfifth)
+        numvals <- lapply(oldcovvalues, sum)
+
+        # TODO: Vectorize this.
         for (oldcovid in oldcovids) {
-            oldcovvalues[[oldcovid]] <- numeric(0)
-        }
-
-        for (line in lines) {
-            row <- strsplit(line, '\t')[[1]]
-            oldpid <- row[[1]]
-            oldcovid <- row[[2]]
-            oldcovvalue <- as.integer(row[[3]])
-
-            previousvals <- oldcovvalues[[oldcovid]]
-            oldcovvalues[[oldcovid]] <- append(previousvals, oldcovvalue)
-        }
-
-        midvals <- list()
-        highvals <- list()
-        numvals <- list()
-        for (i in 1:length(oldcovvalues)) {
-            oldcovid <- names(oldcovvalues)[i]
-            values <- sort(oldcovvalues[[oldcovid]])
-
-            len <- length(values)
-            numvals[[oldcovid]] <- sum(values)
-
-            # TODO: Make this use correct median and 75 percentile functions.
-            midval <- values[ceiling(len/2)]
-            highval <- values[ceiling(3*len/4)]
-
-            midvals[[oldcovid]] <- midval
-            highvals[[oldcovid]] <- highval
-
             lowkey <- sprintf("%s%sl", dimname, oldcovid)
-            covMap[[lowkey]] <- new_covariate_id
-            new_covariate_id <- new_covariate_id + 1
+            covMap[[lowkey]] <- newcovid
+            newcovid <- newcovid + 1
 
             midkey <- sprintf("%s%sm", dimname, oldcovid)
-            covMap[[midkey]] <- new_covariate_id
-            new_covariate_id <- new_covariate_id + 1
+            covMap[[midkey]] <- newcovid
+            newcovid <- newcovid + 1
 
             highkey <- sprintf("%s%sh", dimname, oldcovid)
-            covMap[[highkey]] <- new_covariate_id
-            new_covariate_id <- new_covariate_id + 1
+            covMap[[highkey]] <- newcovid
+            newcovid <- newcovid + 1
         }
 
-        # Get list of covariates to keep or cutoff.
-        numvals <- numvals[order(unlist(numvals), decreasing = TRUE)]
-        covstokeep <- list()
-        for (i in 1:length(numvals)) {
-            covid <- names(numvals)[i]
-            covstokeep[[covid]] <- (i <= cutoff)
-        }
-
-        # Write out the covariates.
-        for (line in lines) {
-            row <- strsplit(line, '\t')[[1]]
-            oldpid <- row[[1]]
+        f <- function(row) {
             oldcovid <- row[[2]]
             oldcovvalue <- as.integer(row[[3]])
-
-            # Do not write out covariates lower than the cutoff.
-            if (!required && !covstokeep[[oldcovid]]) {
-                next
-            }
-
-            newpid <- pidMap[[oldpid]]
 
             if (oldcovvalue >= highvals[[oldcovid]]) {
                 highkey <- sprintf("%s%sh", dimname, oldcovid)
@@ -235,12 +191,59 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
             } else {
                 newcovid <- 1
             }
-            
-            newcovval <- 1
 
-            line <- sprintf("%s\t%s\t%s", newpid, newcovid, newcovval)
-            writeLines(line, outfile)
+            newcovid
         }
+        new_covariate_id <- apply(data, MARGIN=1, FUN=f)
+            
+        f <- function(oldpid) {
+            pidMap[[oldpid]]
+        }
+        new_person_id <- vapply(data$person_id, f, "", USE.NAMES = FALSE)
+
+        # TODO: Does not appear to work.
+        # Get list of covariates to keep or cutoff.
+        numvals <- numvals[order(unlist(numvals), decreasing = TRUE)]
+        covstokeep <- list()
+        for (i in 1:length(numvals)) {
+            covid <- names(numvals)[i]
+            covstokeep[[covid]] <- (i <= cutoff)
+        }
+
+        # TODO: Vectorize this.
+        # Write out the covariates.
+        #for (line in lines) {
+            #row <- strsplit(line, '\t')[[1]]
+            #oldpid <- row[[1]]
+            #oldcovid <- row[[2]]
+            #oldcovvalue <- as.integer(row[[3]])
+
+            # Do not write out covariates lower than the cutoff.
+            #if (!required && !covstokeep[[oldcovid]]) {
+                #next
+            #}
+
+            #newpid <- pidMap[[oldpid]]
+
+            #if (oldcovvalue >= highvals[[oldcovid]]) {
+                #highkey <- sprintf("%s%sh", dimname, oldcovid)
+                #newcovid <- covMap[[highkey]]
+            #} else if (oldcovvalue >= midvals[[oldcovid]]) {
+                #midkey <- sprintf("%s%sm", dimname, oldcovid)
+                #newcovid <- covMap[[midkey]]
+            #} else {
+                #newcovid <- 1
+            #}
+            
+            #newcovval <- 1
+
+            #line <- sprintf("%s\t%s\t%s", newpid, newcovid, newcovval)
+            #writeLines(line, outfile)
+        #}
+        write.table(data.frame(new_person_id, new_covariate_id, rep(1,
+                               length(new_person_id))),
+                    outfile, append = TRUE, row.names = FALSE,
+                    col.names = FALSE)
         print(timer$split())
     }
 
@@ -258,4 +261,10 @@ convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
         writeLines(line, outfile)
     }
     close(outfile)
+}
+
+
+seventyfifth <- function(values) {
+    pos <- 3*length(values)/4
+    mean(c(values[floor(pos)], values[ceiling(pos)]))
 }
