@@ -1,23 +1,130 @@
 #' @export
 generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
-    convertData(datadir, covariatedir, cutoff)
-    dummy <- extractCovariates(covariatedir)
+    convertData(datadir, covariatesdir, cutoff)
+    priority <- prioritizeCovariates(covariatesdir)
 }
 
 
-convertData <- function(datadir, covariatedir, cutoff) {
-    pidMap <- convertCohorts(datadir, covariatedir)
-    convertOutcomes(datadir, covariatedir, pidMap)
-    convertCovariates(datadir, covariatedir, pidMap, cutoff)
+convertData <- function(datadir, covariatesdir, cutoff) {
+    pidMap <- convertCohorts(datadir, covariatesdir)
+    convertOutcomes(datadir, covariatesdir, pidMap)
+    convertCovariates(datadir, covariatesdir, pidMap, cutoff)
 }
 
 
-extractCovariates <- function(covariatedir) {
-    print("extractCovariates not implemented")
+prioritizeCovariates <- function(covariatesdir) {
+    # TODO: Check the logic in this function multiple times!
+    infilepath <- file.path(covariatesdir, "outcomes.csv")
+    outcomes <- read.table(infilepath, header = TRUE, sep = '\t',
+                           col.names = c("new_person_id", "outcome_id"),
+                           colClasses = c(new_person_id="numeric",
+                           outcome_id="numeric"))
+
+    infilepath <- file.path(covariatesdir, "optionalcovariates.csv")
+    # Do not need the new_covariate_value column.
+    covariates <- read.table(infilepath, header = TRUE, sep = '\t',
+                             colClasses = c(new_person_id="numeric",
+                             new_covariate_id="numeric", "NULL"))
+
+    # Build up priority step-by-step.
+    numcovariates <- length(unique(covariates$new_covariate_id))
+    priority <- data.frame(new_covariate_id = unique(covariates$new_covariate_id),
+                           RR = rep(1, numcovariates))
+
+    # Step 1: For each covariate find number of persons with that covariate.
+    numbers <- aggregate(new_person_id ~ new_covariate_id, covariates,
+                         length)
+    numbers <- setNames(numbers, c("new_covariate_id", "numbers"))
+
+    priority <- merge(priority, numbers)
+    priority$RR <- priority$RR / priority$numbers
+
+    # Step 2: For each covariate find number of persons without that covariate.
+    numpeople <- nrow(outcomes)
+    priority$RR <- priority$RR * (numpeople - priority$numbers)
+
+    # Drop temporary column.
+    priority <- priority[,c("new_covariate_id", "RR")]
+
+    # Step 3: For each covariate find number of persons with that covariate and
+    # outcome equal to 1.
+    personswithoutcome <- outcomes[outcomes$outcome_id == 1,]
+    personswithoutcome <- data.frame(
+        new_person_id = personswithoutcome$new_person_id)
+
+    # Restrict covariates to persons with outcome = 1.
+    rescovariates <- merge(covariates, personswithoutcome)
+    
+    numbers <- aggregate(new_person_id ~ new_covariate_id, rescovariates,
+                         length)
+    numbers <- setNames(numbers, c("new_covariate_id", "numbers"))
+
+    # Set any covariates which were dropped to zero.
+    priority <- merge(priority, numbers, all = TRUE)
+    priority$numbers[is.na(priority$numbers)] <- 0
+
+    priority$RR <- priority$RR * priority$numbers
+
+    # Step 4: For each covariate find number of persons without that covariate
+    # and outcome equal to 1.
+    numpeopleoutcome <- sum(outcomes$outcome_id)
+    priority$RR <- priority$RR / (numpeopleoutcome - priority$numbers)
+
+    # Drop temporary column.
+    priority <- priority[,c("new_covariate_id", "RR")]
+
+    # Next continue to compute the Bias.
+    # If RR is less than 1, invert it.
+    priority$RR <- vapply(
+        priority$RR,
+        function(x) {
+            if (x < 1) {
+                return(1/x)
+            }
+            return(x)
+        },
+        1)
+
+    # Compute number of people within each cohort with the different
+    # covariates.
+    infilepath <- file.path(covariatesdir, "cohorts.csv")
+    cohorts <- read.table(infilepath, header = TRUE, sep = '\t',
+                          col.names = c("new_person_id", "outcome_id"),
+                          colClasses = c(new_person_id="numeric",
+                          outcome_id="numeric"))
+
+    covariates <- merge(covariates, cohorts)
+    mask <- covariates$outcome_id == 1
+    covariates <- covariates[mask,]
+    PC1 <- aggregate(new_person_id ~ new_covariate_id,
+                     covariates,
+                     length)
+    PC1 <- setNames(PC1, c("new_covariate_id", "PC1"))
+
+    priority <- merge(priority, PC1, all = TRUE)
+    priority$PC1[is.na(priority$PC1)] <- 0
+
+    priority$PC0 <- numpeople - priority$PC1
+
+    # Compute the prioity.
+    priority$priority <- ((priority$PC1 * (priority$RR - 1) + 1) /
+                          (priority$PC0 * (priority$RR - 1) + 1) )
+
+    # If the priority is NaN, that means that RR was infinity. If RR is
+    # infinity, we want priority to simply be PC1/PC0. (Usually this means that
+    # PC1 is equal to 0.)
+    mask <- is.nan(priority$priority)
+    priority[mask,]$priority <- priority[mask,]$PC1 / priority[mask,]$PC0
+
+    # Next we scale the priority.
+    priority$priority <- abs(log(priority$priority))
+
+    priority <- priority[, c("new_covariate_id", "priority")]
+    priority
 }
 
 
-convertOutcomes <- function(datadir, covariatedir, pidMap) {
+convertOutcomes <- function(datadir, covariatesdir, pidMap) {
     infilepath <- file.path(datadir, "outcomes.csv")
     outcomes <- read.table(infilepath, header = TRUE, sep = '\t',
                            col.names = c("old_person_id", "outcome_id"),
@@ -30,7 +137,7 @@ convertOutcomes <- function(datadir, covariatedir, pidMap) {
 }
 
 
-convertCohorts <- function(datadir, covariatedir) {
+convertCohorts <- function(datadir, covariatesdir) {
     infilepath <- file.path(datadir, "cohorts.csv")
     cohorts <- read.table(infilepath, header = TRUE, sep = '\t',
                           col.names = c("old_person_id", "cohort_id"),
@@ -51,7 +158,7 @@ convertCohorts <- function(datadir, covariatedir) {
 }
 
 
-convertCovariates <- function(datadir, covariatedir, pidMap, cutoff) {
+convertCovariates <- function(datadir, covariatesdir, pidMap, cutoff) {
     if (is.null(cutoff)) {
         cutoff <- 1e10
     }
