@@ -1,15 +1,15 @@
 /* Build condition era dimension table. */
 CREATE TABLE #dim (
     person_id bigint,
-    concept_id bigint,
-    count int
+    covariate_id bigint,
+    covariate_count int
 );
 
 INSERT INTO #dim
 SELECT DISTINCT
     cp.person_id,
-    ce.condition_concept_id as concept_id,
-    COUNT(ce.condition_concept_id) as count
+    ce.condition_concept_id as covariate_id,
+    COUNT(ce.condition_concept_id) as covariate_count
 FROM
     #cohort_person cp INNER JOIN mslr_cdm4.condition_era ce
         ON cp.person_id = ce.person_id

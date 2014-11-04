@@ -44,7 +44,7 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
         cat(msg)
         return(NULL)
     }
-    
+
     # TODO: Move somewhere global.
     defaultCohortDetails <- list(
         washoutWindow=183,
@@ -114,11 +114,11 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
 
     cat("Building outcomes data.\n")
     outcomessql <- ""
-    buildFakeOutcomes(conn, outcomesql)
+    buildOutcomes(conn, outcomesql)
 
     cat("Downloading outcomes data.\n")
-    outcomes <- downloadoutcomes(conn, connectionDetails$dbms)
-    saveFakeOutcomes(datadir, outcomes)
+    outcomes <- downloadOutcomes(conn, connectionDetails$dbms)
+    saveOutcomes(datadir, outcomes)
 
     for (i in 1:length(dimsqls)) {
         dimname <- names(dimsqls)[i]
@@ -138,46 +138,30 @@ generateDataFromSql <- function(sqldir, datadir, connectionDetails,
 }
 
 
-buildFakeOutcomes <- function(conn, outcomesql) {
-    NULL
+buildOutcomes <- function(conn, outcomesql) {
+    cat("Warning: buildOutcomes not yet implemented\n")
 }
 
-downloadoutcomes <- function(conn, dbms) {
+downloadOutcomes <- function(conn, dbms) {
+    cat("Warning: downloadOutcomes not implemented\n")
     outcomes <- NULL
 
     outcomes
 }
 
-# TODO: Put somewhere global. Possibly write eof function.
-EOF <- character(0)
 
-saveFakeOutcomes <- function(datadir, outcomes) {
+saveOutcomes <- function(datadir, outcomes) {
+    cat("Warning: saveOutcomes not implemented\n")
+
     # Needs to be fixed!
     infilepath <- file.path(datadir, "cohorts.csv")
-    infile <- file(infilepath, "r")
+    outcomes <- read.table(infilepath, header = TRUE, sep = '\t',
+                           col.names = c("person_id", "outcome_id"),
+                           colClasses = c(person_id="character",
+                           outcome_id="numeric"))
 
     outfilepath <- file.path(datadir, "outcomes.csv")
-    outfile <- file(outfilepath, "w")
-
-    # Take care of headers.
-    readLines(infile, n = 1)
-    writeLines("person_id\toutcome_id", outfile)
-
-    line <- readLines(infile, n = 1)
-    while (!identical(line, EOF)) {
-        row <- strsplit(line, '\t')[[1]]
-        person_id <- row[1]
-        outcome_id <- sample(0:1, 1)
-
-        outline <- sprintf("%s\t%s", person_id, outcome_id)
-        writeLines(outline, outfile)
-
-        line <- readLines(infile, n = 1)
-    }
-    
-    
-    close(outfile)
-    close(infile)
+    write.table(outcomes, file = outfilepath, sep = '\t', row.names = FALSE)
 }
 
 
@@ -205,24 +189,26 @@ downloaddimension <- function(conn, dbms, cutoff) {
     # Create prevalence table.
     sql = "
     CREATE TABLE #prevalence (
-        concept_id bigint,
-        count int
+        covariate_id bigint,
+        person_count int
     );
 
     INSERT INTO #prevalence
     SELECT
-        concept_id,
+        covariate_id,
         COUNT(DISTINCT(person_id))
     FROM
         #dim
     GROUP BY
-        concept_id
+        covariate_id
     ;
     "
     sql <- translateSql(sql = sql, targetDialect = dbms)$sql
     executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
 
 
+    # TODO: This should probably be called once when building the cohorts.
+    # TODO: These statements should probably be combined.
     # Get cohort size.
     sql = "
     SELECT COUNT(DISTINCT(person_id))
@@ -236,15 +222,15 @@ downloaddimension <- function(conn, dbms, cutoff) {
     # Get prevalent ids.
     sql = "
     CREATE TABLE #prevalent_ids (
-        concept_id bigint
+        covariate_id bigint
     )
     ;
 
     INSERT INTO prevalent_ids
     SELECT
-        concept_id
+        covariate_id
     FROM prevalence
-    ORDER BY @(count/2 - %s)
+    ORDER BY @(person_count/2 - %s)
     LIMIT %s
     ;
     "
@@ -256,11 +242,11 @@ downloaddimension <- function(conn, dbms, cutoff) {
     sql = "
     SELECT
         d.person_id,
-        d.concept_id,
-        d.count
+        d.covariate_id,
+        d.covariate_count
     FROM
         #dim d INNER JOIN #prevalent_ids p
-            ON d.concept_id = p.concept_id
+            ON d.covariate_id = p.covariate_id
     ;
     "
     sql <- translateSql(sql = sql, targetDialect = dbms)$sql

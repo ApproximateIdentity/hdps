@@ -1,15 +1,15 @@
 /* Build drug era dimension table. */
 CREATE TABLE #dim (
     person_id bigint,
-    concept_id bigint,
-    count int
+    covariate_id bigint,
+    covariate_count int
 );
 
 INSERT INTO #dim
 SELECT DISTINCT
     cp.person_id,
-    de.drug_concept_id as concept_id,
-    COUNT(de.drug_concept_id) as count
+    de.drug_concept_id as covariate_id,
+    COUNT(de.drug_concept_id) as covariate_count
 FROM
     #cohort_person cp INNER JOIN mslr_cdm4.drug_era de
         ON cp.person_id = de.person_id

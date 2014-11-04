@@ -1,15 +1,15 @@
 /* Build procedure occurence dimension table. */
 CREATE TABLE #dim (
     person_id bigint,
-    concept_id bigint,
-    count int
+    covariate_id bigint,
+    covariate_count int
 );
 
 INSERT INTO #dim
 SELECT DISTINCT
     cp.person_id,
-    po.procedure_occurrence_id as concept_id,
-    COUNT(po.procedure_occurrence_id) as count
+    po.procedure_occurrence_id as covariate_id,
+    COUNT(po.procedure_occurrence_id) as covariate_count
 FROM
     #cohort_person cp INNER JOIN mslr_cdm4.procedure_occurrence po
         ON cp.person_id = po.person_id
