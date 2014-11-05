@@ -25,19 +25,23 @@ connectionDetails <- list(
     schema = "mslr_cdm4",
     port = "5439")
 
+# Cohort details.
 rifaximin <- 1735947
 Lactulose <- 987245
 MyocardialInfarction <- 35205189
 
-# Cohort details.
 cohortDetails <- list(
     drugA = rifaximin,
     drugB = Lactulose,
-    indicator = MyocardialInfarction,
-    schema = "mslr_cdm4")
+    indicator = MyocardialInfarction)
 
-generateDataFromSql(sqldir, datadir, connectionDetails, cohortDetails,
-                    cutoff=100)
+generateDataFromSql(
+    sqldir,
+    datadir,
+    connectionDetails,
+    cohortDetails = cohortDetails,
+    cutoff = 100)
+
 generateCovariatesFromData(datadir, covariatesdir, cutoff = 100)
 
 # Run cyclops.

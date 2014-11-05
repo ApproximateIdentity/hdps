@@ -40,7 +40,9 @@ INSERT INTO #cohort_outcome (row_id, cohort_id, person_id, outcome_id, time_to_e
 	SELECT cp1.row_id,
 		cp1.cohort_id,
 		cp1.person_id,
-		ca1.ancestor_concept_id AS outcome_id,
+		/* ca1.ancestor_concept_id AS outcome_id, */
+        /* Warning: This is changed from original outcome sql! */
+        1 as outcome_id,
 		datediff(dd, cp1.cohort_start_date, co1.condition_start_date) AS time_to_event
 	FROM #cohort_person cp1
 	INNER JOIN 

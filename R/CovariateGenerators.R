@@ -1,7 +1,30 @@
 #' @export
 generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
     convertData(datadir, covariatesdir, cutoff)
-    priority <- prioritizeCovariates(covariatesdir)
+    priority <- prioritizeOptCovariates(covariatesdir)
+    addPrioritizedCovariates(covariatesdir, priority)
+}
+
+addPrioritizedCovariates <- function(covariatesdir, priority,
+                                     priorityCutoff=200) {
+
+    infilepath <- file.path(covariatesdir, "optionalcovariates.csv")
+    optionalcovariates <- read.table(infilepath, header = TRUE, sep = '\t',
+                                     col.names = c("new_person_id",
+                                     "new_covariate_id", "new_covariate_value"),
+                                     colClasses = c(new_person_id="numeric",
+                                     new_covariate_id="numeric",
+                                     new_covariate_value="numeric"))
+
+    priority <- priority[order(-priority$priority),]
+    idstokeep <- priority[1:priorityCutoff, "new_covariate_id"]
+    
+    mask <- optionalcovariates$new_covariate_id %in% idstokeep
+    optionalcovariates <- optionalcovariates[mask,]
+
+    outfilepath <- file.path(covariatesdir, "covariates.csv")
+    write.table(optionalcovariates, file = outfilepath, append = TRUE,
+                sep = '\t', row.names = FALSE, col.names = FALSE)
 }
 
 
@@ -12,7 +35,7 @@ convertData <- function(datadir, covariatesdir, cutoff) {
 }
 
 
-prioritizeCovariates <- function(covariatesdir) {
+prioritizeOptCovariates <- function(covariatesdir) {
     # TODO: Check the logic in this function multiple times!
     infilepath <- file.path(covariatesdir, "outcomes.csv")
     outcomes <- read.table(infilepath, header = TRUE, sep = '\t',
@@ -163,7 +186,7 @@ convertCovariates <- function(datadir, covariatesdir, pidMap, cutoff) {
         cutoff <- 1e10
     }
 
-    reqoutfilepath <- file.path(covariatesdir, "requiredcovariates.csv")
+    reqoutfilepath <- file.path(covariatesdir, "covariates.csv")
     optoutfilepath <- file.path(covariatesdir, "optionalcovariates.csv")
     covmapoutfilepath <- file.path(covariatesdir, "covariateMap.csv")
 

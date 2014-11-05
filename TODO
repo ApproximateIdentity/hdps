@@ -17,4 +17,4 @@
 * Check code for inconsistencies in naming 'covariatesdir' vs 'covariatedir'
 * What is results_schema?
 * Is outcomes format correct? Should there be multiple outcomes?
-* How to handle excluded persons?
+* How to handle excluded persons? Probably run cohorts and outcomes at once?

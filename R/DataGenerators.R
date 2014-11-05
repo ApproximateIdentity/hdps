@@ -233,7 +233,7 @@ buildOutcomes <- function(conn, outcomesql) {
 
 downloadOutcomes <- function(conn, dbms) {
     sql <- "
-    SELECT
+    SELECT DISTINCT
         person_id,
         outcome_id
     FROM #cohort_outcome
@@ -254,7 +254,7 @@ saveoutcomes <- function(datadir, outcomes) {
 
 downloadcohorts <- function(conn, dbms) {
     sql <- "
-    SELECT
+    SELECT DISTINCT
         person_id,
         cohort_id
     FROM #cohort_person

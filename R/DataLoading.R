@@ -1,33 +1,32 @@
 #' @export
 getSparseData <- function(covariatesdir) {
-    cohortsfile <- file.path(covariatesdir, "cohorts.csv")
     covariatesfile <- file.path(covariatesdir, "covariates.csv")
 
-    cohorts <- read.table(cohortsfile, header=TRUE)
-    covariates <- read.table(covariatesfile, header=TRUE)
+    cohortsfile <- file.path(covariatesdir, "cohorts.csv")
 
-    numPersons <- max(cohorts$person_id)
-    numCovariates <- max(covariates$covariate_id)
+    covariates <- read.table(covariatesfile, header = TRUE, sep = '\t',
+                             col.names = c("new_person_id",
+                             "new_covariate_id", "new_covariate_value"),
+                             colClasses = c(new_person_id="numeric",
+                             new_covariate_id="numeric",
+                             new_covariate_value="numeric"))
 
-    dimensions <- c(numPersons, numCovariates)
+    cohorts <- read.table(cohortsfile, header = TRUE, sep = '\t', col.names =
+                          c("new_person_id", "cohort_id"), colClasses =
+                          c(new_person_id="numeric", cohort_id="numeric"))
 
-    X <- getSparseMatrix(covariates, dimensions)
-    y <- arrange(cohorts, person_id)$cohort_id
+    # TODO: This works because it is assumed that the persons are labeled
+    # consecutively without any holes. This should probably be enforced through
+    # checks somewhere or incomprehensible errors might be thrown.
+    X <- sparseMatrix(i = covariates$new_person_id,
+                      j = covariates$new_covariate_id,
+                      x = covariates$new_covariate_value)
+
+    # TODO: This should already be ordered, but it is essential that it be so.
+    # This should probably be enforced with a check somewhere.
+    cohorts <- cohorts[order(cohorts$new_person_id),]
+    y <- cohorts$cohort_id
 
     sparseData <- list(X = X, y = y)
     sparseData
-}
-
-
-getSparseMatrix <- function(covariates, dimensions) {
-    X <- Matrix(0, nrow = dimensions[1], ncol = dimensions[2], sparse = TRUE)
-    for (r in 1:nrow(covariates)) {
-        row <- covariates[r,]
-        i <- row$person_id
-        j <- row$covariate_id
-        val <- row$covariate_value
-        X[i, j] <- val
-    }
-
-    X
 }
