@@ -1,22 +1,8 @@
 /* Authors:   Patrick Ryan, Martijn Schuemie
- * Last update date:  7 September 2014
  * 
  * Parameterized SQL to create cohorts to be used as input in fitting
  * large-scale analytics.
  */
-
-{DEFAULT @cdm_schema = 'CDM4_SIM'} /*CDM4_SIM  CDM_TRUVEN_MDCD*/
-{DEFAULT @results_schema = 'scratch'}
-{DEFAULT @target_drug_concept_id = 755695}  /*fluoxetine*/
-{DEFAULT @comparator_drug_concept_id = 739138} /*sertraline*/
-{DEFAULT @indication_concept_ids = 439926} /*malaise and fatigue*/
-{DEFAULT @washout_window = 183}
-{DEFAULT @indication_lookback_window = 183}
-{DEFAULT @study_start_date = ''}
-{DEFAULT @study_end_date = ''}
-{DEFAULT @exclusion_concept_ids = 4027133,4032243,4146536,2002282,2213572,2005890,43534760,21601019} 
-{DEFAULT @exposure_table = 'DRUG_ERA'}  /*the table that contains the exposure information (DRUG_ERA or COHORT)*/
-
 USE @results_schema;
 
 IF OBJECT_ID('raw_cohort', 'U') IS NOT NULL --This should only do something in Oracle

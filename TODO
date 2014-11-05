@@ -15,3 +15,6 @@
 * Do cutoff within each dimension
 * Change cohorts to persons in data generators
 * Check code for inconsistencies in naming 'covariatesdir' vs 'covariatedir'
+* What is results_schema?
+* Is outcomes format correct? Should there be multiple outcomes?
+* How to handle excluded persons?
