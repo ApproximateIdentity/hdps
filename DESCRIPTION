@@ -10,7 +10,6 @@ Depends:
     tutils,
     data.table,
     tools,
-    bit64,
     plyr,
     Matrix
 License: Apache Version 2.0

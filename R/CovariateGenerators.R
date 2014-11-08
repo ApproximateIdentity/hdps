@@ -1,5 +1,9 @@
 #' @export
 generateCovariatesFromData <- function(datadir, covariatesdir, cutoff=NULL) {
+
+    unlink(covariatesdir, recursive = TRUE)
+    dir.create(covariatesdir)
+
     convertData(datadir, covariatesdir, cutoff)
     priority <- prioritizeOptCovariates(covariatesdir)
     addPrioritizedCovariates(covariatesdir, priority)

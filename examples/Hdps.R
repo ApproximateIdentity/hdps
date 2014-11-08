@@ -9,13 +9,6 @@ sqldir <- file.path(basedir, "sql")
 datadir <- file.path(basedir, "data")
 covariatesdir <- file.path(basedir, "covariates")
 
-# Build output directories if necessary.
-dir.create(file.path(datadir, "dimensions", "required"),
-           showWarnings = FALSE, recursive = TRUE)
-dir.create(file.path(datadir, "dimensions", "optional"),
-           showWarnings = FALSE, recursive = TRUE)
-dir.create(covariatesdir, showWarnings = FALSE, recursive = TRUE)
-
 # Login info.
 connectionDetails <- list(
     password = Sys.getenv("MYPGPASSWORD"),
@@ -35,16 +28,21 @@ cohortDetails <- list(
     drugB = Lactulose,
     indicator = MyocardialInfarction)
 
-generateDataFromSql(
-    sqldir,
-    datadir,
-    connectionDetails,
-    cohortDetails = cohortDetails,
-    cutoff = 100)
+#generateDataFromSql(
+#    sqldir,
+#    datadir,
+#    connectionDetails,
+#    cohortDetails = cohortDetails,
+#    cutoff = 100)
 
+cat("Generating data...\n")
+generateSimulatedData(datadir)
+
+cat("Converting covariates...\n")
 generateCovariatesFromData(datadir, covariatesdir, cutoff = 100)
 
 # Run cyclops.
+cat("Running Cyclops...\n")
 sparseData <- getSparseData(covariatesdir)
 cyclopsData <- createCyclopsDataFrame(y = sparseData$y,
                                       sx = sparseData$X,

@@ -49,12 +49,14 @@ generateDataFromSql <- function(
     outcomeDetails = defaultOutcomeDetails,
     cutoff = NULL) {
 
-    # Check that the directories and necessary files exist.
+    # Check that the directories and necessary sql files exist.
     if (!validSqlStructure(sqldir)) {
         cat("Input sql invalid. Stopping analysis.\n")
         return(NULL)
     }
 
+    # Clean out any old data in datadir and rebuild necessary directories.
+    cleanDataDir(datadir)
 
     # Fill in missing details with defaults.
     cohortDetails <- addDefaults(cohortDetails, defaultCohortDetails)
@@ -155,6 +157,71 @@ generateDataFromSql <- function(
 }
 
 
+generateSimulatedData <- function(
+    datadir,
+    numpersons = 1000,
+    numreqdims = 3,
+    numoptdims = 10) {
+
+    cleanDataDir(datadir)
+
+    # Generate person_ids.
+    pids <- sample(1:1000000000, numpersons)
+
+    # Generate cohorts.
+    cohortids <- sample(0:1, numpersons, replace = TRUE)
+    cohorts <- data.frame(
+        person_id = pids,
+        cohort_id = cohortids)
+
+    filepath <- file.path(datadir, "cohorts.csv")
+    write.table(cohorts, file=filepath, sep="\t", row.names=FALSE)
+
+    # Generate outcomes.
+    outcomeids <- sample(0:1, numpersons, replace = TRUE)
+    outcomes <- data.frame(
+        person_id = pids,
+        outcome_id = outcomeids)
+
+    filepath <- file.path(datadir, "outcomes.csv")
+    write.table(outcomes, file=filepath, sep="\t", row.names=FALSE)
+
+    # Generate dimensions.
+    reqdir <- file.path(datadir, "dimensions", "required")
+    generateSimulatedDims(reqdir, pids, numreqdims)
+    optdir <- file.path(datadir, "dimensions", "optional")
+    generateSimulatedDims(optdir, pids, numoptdims)
+}
+
+
+# TODO: There should maybe be a cutoff like generateDataFromSql.
+#' @export
+generateSimulatedDims <- function(outdir, pids, numdims) {
+    for (i in 1:numdims) {
+        filename <- sprintf("%sdim%s.csv", basename(outdir), i)
+        filepath <- file.path(outdir, filename)
+
+        # TODO: Make this data more realistic.
+        newpids <- sample(pids, .5 * length(pids))
+        newpids <- rep(newpids, each = 5)
+        
+        covids <- sample(1:1000000000, 0.7 * length(newpids))
+        covs <- sample(covids,
+                       length(newpids),
+                       replace = TRUE)
+        dim <- data.frame(
+            person_id = newpids,
+            covariate_id = covs,
+            covariate_value = rep(1, length(newpids)))
+
+        dim <- aggregate(covariate_value ~ person_id + covariate_id,
+                         dim, sum)
+
+        write.table(dim, file=filepath, sep="\t", row.names=FALSE)
+    }
+}
+
+
 validSqlStructure <- function(sqldir) {
     if (!file.exists(sqldir) || !(file.info(sqldir)$isdir)) {
         msg <- sprintf("Error: Directory %s does not exist.\n", sqldir)
@@ -210,6 +277,16 @@ validSqlStructure <- function(sqldir) {
 }
 
 
+cleanDataDir <- function(datadir) {
+    unlink(datadir, recursive = TRUE)
+    dimdir <- file.path(datadir, "dimensions")
+    reqdir <- file.path(dimdir, "required")
+    optdir <- file.path(dimdir, "optional")
+    dir.create(reqdir, recursive = TRUE)
+    dir.create(optdir, recursive = TRUE)
+}
+
+
 addDefaults <- function(details, defaultDetails) {
     if (is.null(details)) {
         return(defaultDetails)
@@ -223,11 +300,6 @@ addDefaults <- function(details, defaultDetails) {
     }
 
     details
-}
-
-
-buildOutcomes <- function(conn, outcomesql) {
-    cat("Warning: buildOutcomes not yet implemented\n")
 }
 
 
