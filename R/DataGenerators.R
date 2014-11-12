@@ -68,7 +68,7 @@ generateDataFromSql <- function(
     connectionDetails,
     cohortDetails = defaultCohortDetails,
     outcomeDetails = defaultOutcomeDetails,
-    cutoff = NULL) {
+    minPatients = NULL) {
 
     # Check that the directories and necessary sql files exist.
     if (!validSqlStructure(sqldir)) {
@@ -170,7 +170,7 @@ generateDataFromSql <- function(
                    reportOverallTime = FALSE)
 
         cat("Downloading dimension data...\n")
-        dim <- downloaddimension(conn, connectionDetails$dbms, cutoff)
+        dim <- downloaddimension(conn, connectionDetails$dbms, minPatients)
         savedimension(datadir, dimname, dim, required[[dimname]])
     }
 
@@ -366,12 +366,12 @@ savecohorts <- function(datadir, cohorts) {
 }
 
 
-downloaddimension <- function(conn, dbms, cutoff) {
-    # TODO: Probably should just return everything immediately if cutoff is
-    # NULL.
-    if (is.null(cutoff)) {
+downloaddimension <- function(conn, dbms, minPatients) {
+    # TODO: Probably should just return everything immediately if minPatients is
+    # NULL to speed up on server computations.
+    if (is.null(minPatients)) {
         # Infinity.
-        cutoff <- 1000000000
+        minPatients <- 1000000000
     }
     # Create prevalence table.
     sql = "
@@ -422,7 +422,7 @@ downloaddimension <- function(conn, dbms, cutoff) {
     ;
     "
     # TODO: This should use renderSql.
-    sql = sprintf(sql, numpersons, cutoff)
+    sql = sprintf(sql, numpersons, minPatients)
     sql <- translateSql(sql = sql, targetDialect = dbms)$sql
     executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
 

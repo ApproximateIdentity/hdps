@@ -28,18 +28,19 @@ cohortDetails <- list(
     drugB = Lactulose,
     indicator = MyocardialInfarction)
 
-#generateDataFromSql(
-#    sqldir,
-#    datadir,
-#    connectionDetails,
-#    cohortDetails = cohortDetails,
-#    cutoff = 100)
-
 cat("Generating data...\n")
-generateSimulatedData(datadir)
+
+generateDataFromSql(
+    sqldir,
+    datadir,
+    connectionDetails,
+    cohortDetails = cohortDetails,
+    minPatients = 100)
+
+#generateSimulatedData(datadir)
 
 cat("Converting covariates...\n")
-generateCovariatesFromData(datadir, covariatesdir, cutoff = 100)
+generateCovariatesFromData(datadir, covariatesdir, minPatients = 100)
 
 # Run cyclops.
 cat("Running Cyclops...\n")
