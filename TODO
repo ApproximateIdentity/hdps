@@ -16,3 +16,7 @@
 * What is results_schema?
 * Is outcomes format correct? Should there be multiple outcomes?
 * How to handle excluded persons? Probably run cohorts and outcomes at once?
+* Update references to "ApproximateIdentity" to "OHDSI" whenever that move
+occurs...
+
+* Update the interface for covariateGenerators.
