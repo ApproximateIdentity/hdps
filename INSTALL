@@ -20,3 +20,17 @@ created in the previous step and then run the following commands:
 
 Load the package with library("hdps") and you don't get an error you should be
 all set.
+
+Note that if you have make installed, you can use make to do this. Run
+
+> make
+
+at the command line to uninstall and reinstall hdps. Run
+
+> make uninstall
+
+to uninstall hdps and run
+
+> make reinstall
+
+to reinstall it.
