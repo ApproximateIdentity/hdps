@@ -34,12 +34,12 @@ cat("Generating data...\n")
 #    datadir,
 #    connectionDetails,
 #    cohortDetails = cohortDetails,
-#    minPatients = 100)
+#    topN = 100)
 
 generateSimulatedData(datadir)
 
 cat("Converting covariates...\n")
-generateCovariatesFromData(datadir, covariatesdir, minPatients = 100)
+generateCovariatesFromData(datadir, covariatesdir, topN = 100)
 
 
 # Run Cyclops

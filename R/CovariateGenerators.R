@@ -20,12 +20,12 @@
 # @author Thomas Nyberg
 
 #' @export
-generateCovariatesFromData <- function(datadir, covariatesdir, minPatients=NULL) {
+generateCovariatesFromData <- function(datadir, covariatesdir, topN=NULL) {
 
     unlink(covariatesdir, recursive = TRUE)
     dir.create(covariatesdir)
 
-    convertData(datadir, covariatesdir, minPatients)
+    convertData(datadir, covariatesdir, topN)
     priority <- prioritizeOptCovariates(covariatesdir)
     addPrioritizedCovariates(covariatesdir, priority)
 }
@@ -53,10 +53,10 @@ addPrioritizedCovariates <- function(covariatesdir, priority,
 }
 
 
-convertData <- function(datadir, covariatesdir, minPatients) {
+convertData <- function(datadir, covariatesdir, topN) {
     pidMap <- convertCohorts(datadir, covariatesdir)
     convertOutcomes(datadir, covariatesdir, pidMap)
-    convertCovariates(datadir, covariatesdir, pidMap, minPatients)
+    convertCovariates(datadir, covariatesdir, pidMap, topN)
 }
 
 
@@ -206,9 +206,9 @@ convertCohorts <- function(datadir, covariatesdir) {
 }
 
 
-convertCovariates <- function(datadir, covariatesdir, pidMap, minPatients) {
-    if (is.null(minPatients)) {
-        minPatients <- 1e10
+convertCovariates <- function(datadir, covariatesdir, pidMap, topN) {
+    if (is.null(topN)) {
+        topN <- 1e10
     }
 
     reqoutfilepath <- file.path(covariatesdir, "covariates.csv")
@@ -257,11 +257,11 @@ convertCovariates <- function(datadir, covariatesdir, pidMap, minPatients) {
         covariates <- covariates[, c('new_person_id', 'old_covariate_id',
                                      'old_covariate_value')]
 
-        # Use minPatients to drop covariates.
+        # Use topN to drop covariates.
         covcounts <- aggregate(old_covariate_value ~ old_covariate_id,
                                covariates, length)
         covcounts <- covcounts[order(-covcounts$old_covariate_value),]
-        localcutoff <- min(minPatients, length(covcounts$old_covariate_id))
+        localcutoff <- min(topN, length(covcounts$old_covariate_id))
         covstokeep <- covcounts[1:localcutoff,]$old_covariate_id
         covariates <- covariates[covariates$old_covariate_id %in% covstokeep,]
 

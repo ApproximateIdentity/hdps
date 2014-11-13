@@ -21,4 +21,6 @@ occurs...
 
 * Update the interface for covariateGenerators.
 
-* Should Matrix be a prerequisite? Or should the data preparation be inside the actual examples/Hdps script?
+* Change dataGenerators to only read .sql files and put READMEs in the folders
+
+* Should topN have a default of (say) 200 in both functions?
