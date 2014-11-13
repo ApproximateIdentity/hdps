@@ -68,7 +68,7 @@ generateDataFromSql <- function(
     connectionDetails,
     cohortDetails = defaultCohortDetails,
     outcomeDetails = defaultOutcomeDetails,
-    topN = NULL,
+    topN = 200,
     minPatients = NULL) {
 
     if (!is.null(minPatients)) {

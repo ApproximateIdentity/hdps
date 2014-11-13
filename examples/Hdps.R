@@ -40,7 +40,7 @@ generateSimulatedData(datadir)
 
 cat("Converting covariates...\n")
 generateCovariatesFromData(datadir, covariatesdir, topN = 100,
-                           minPatients = 100)
+                           minPatients = 100, topK = 300)
 
 
 # Run Cyclops

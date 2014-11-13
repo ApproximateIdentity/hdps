@@ -20,8 +20,8 @@
 # @author Thomas Nyberg
 
 #' @export
-generateCovariatesFromData <- function(datadir, covariatesdir, topN=NULL,
-                                       minPatients = NULL) {
+generateCovariatesFromData <- function(datadir, covariatesdir, topN = 200,
+                                       minPatients = NULL, topK = 500) {
 
     if (!is.null(minPatients)) {
         cat("Warning: minPatients is not yet implemented\n")
@@ -32,11 +32,10 @@ generateCovariatesFromData <- function(datadir, covariatesdir, topN=NULL,
 
     convertData(datadir, covariatesdir, topN)
     priority <- prioritizeOptCovariates(covariatesdir)
-    addPrioritizedCovariates(covariatesdir, priority)
+    addPrioritizedCovariates(covariatesdir, priority, topK)
 }
 
-addPrioritizedCovariates <- function(covariatesdir, priority,
-                                     priorityCutoff=200) {
+addPrioritizedCovariates <- function(covariatesdir, priority, topK) {
 
     infilepath <- file.path(covariatesdir, "optionalcovariates.csv")
     optionalcovariates <- read.table(infilepath, header = TRUE, sep = '\t',
@@ -47,7 +46,7 @@ addPrioritizedCovariates <- function(covariatesdir, priority,
                                      new_covariate_value="numeric"))
 
     priority <- priority[order(-priority$priority),]
-    idstokeep <- priority[1:priorityCutoff, "new_covariate_id"]
+    idstokeep <- priority[1:topK, "new_covariate_id"]
     
     mask <- optionalcovariates$new_covariate_id %in% idstokeep
     optionalcovariates <- optionalcovariates[mask,]
