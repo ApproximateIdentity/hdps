@@ -20,3 +20,5 @@
 occurs...
 
 * Update the interface for covariateGenerators.
+
+* Should Matrix be a prerequisite? Or should the data preparation be inside the actual examples/Hdps script?

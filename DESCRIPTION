@@ -7,10 +7,7 @@ Depends:
     R,
     DatabaseConnector,
     SqlRender,
-    tutils,
     data.table,
-    tools,
-    plyr,
-    Matrix
+    tools
 License: Apache Version 2.0
 LazyData: true

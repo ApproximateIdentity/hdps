@@ -187,7 +187,7 @@ generateSimulatedData <- function(
     cleanDataDir(datadir)
 
     # Generate person_ids.
-    pids <- sample(1:1000000000, numpersons)
+    pids <- sample(1:10000000, numpersons)
 
     # Generate cohorts.
     cohortids <- sample(0:1, numpersons, replace = TRUE)
@@ -226,7 +226,7 @@ generateSimulatedDims <- function(outdir, pids, numdims) {
         newpids <- sample(pids, .5 * length(pids))
         newpids <- rep(newpids, each = 5)
         
-        covids <- sample(1:1000000000, 0.7 * length(newpids))
+        covids <- sample(1:10000000, 0.7 * length(newpids))
         covs <- sample(covids,
                        length(newpids),
                        replace = TRUE)
