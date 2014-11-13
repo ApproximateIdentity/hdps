@@ -1,5 +1,4 @@
 library(hdps)
-library(Cyclops)
 
 # Base repository folder. You may want to change this.
 basedir <- getwd()
@@ -42,6 +41,10 @@ generateSimulatedData(datadir)
 cat("Converting covariates...\n")
 generateCovariatesFromData(datadir, covariatesdir, minPatients = 100)
 
+
+# Run Cyclops
+library(Cyclops)
+
 # Function which loads data into format required by Cyclops.
 getSparseData <- function(covariatesdir) {
     covariatesfile <- file.path(covariatesdir, "covariates.csv")
@@ -77,7 +80,6 @@ getSparseData <- function(covariatesdir) {
 
 sparseData <- getSparseData(covariatesdir)
 
-# Run Cyclops
 cat("Running Cyclops...\n")
 cyclopsData <- createCyclopsDataFrame(y = sparseData$y,
                                       sx = sparseData$X,

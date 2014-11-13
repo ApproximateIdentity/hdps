@@ -186,8 +186,9 @@ generateSimulatedData <- function(
 
     cleanDataDir(datadir)
 
-    # Generate person_ids.
-    pids <- sample(1:10000000, numpersons)
+    # Generate person ids.
+    maxpid = 1000000000
+    pids <- unique(floor(runif(numpersons, min = 1, max = maxpid)))
 
     # Generate cohorts.
     cohortids <- sample(0:1, numpersons, replace = TRUE)
@@ -226,7 +227,11 @@ generateSimulatedDims <- function(outdir, pids, numdims) {
         newpids <- sample(pids, .5 * length(pids))
         newpids <- rep(newpids, each = 5)
         
-        covids <- sample(1:10000000, 0.7 * length(newpids))
+        # Generate covariate ids.
+        maxcovid = 1000000000
+        covids <- floor(runif(0.7 * length(newpids), min = 1, max = maxcovid))
+
+        # This helps force some covariate collitions.
         covs <- sample(covids,
                        length(newpids),
                        replace = TRUE)
