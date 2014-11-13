@@ -221,14 +221,12 @@ generateSimulatedData <- function(
 }
 
 
-# TODO: There should maybe be a cutoff like generateDataFromSql.
 #' @export
 generateSimulatedDims <- function(outdir, pids, numdims) {
     for (i in 1:numdims) {
         filename <- sprintf("%sdim%s.csv", basename(outdir), i)
         filepath <- file.path(outdir, filename)
 
-        # TODO: Make this data more realistic.
         newpids <- sample(pids, .5 * length(pids))
         newpids <- rep(newpids, each = 5)
         
@@ -405,7 +403,6 @@ downloaddimension <- function(conn, dbms, topN) {
 
 
     # TODO: This should probably be called once when building the cohorts.
-    # TODO: These statements should probably be combined.
     # Get cohort size.
     sql = "
     SELECT COUNT(DISTINCT(person_id))
@@ -427,12 +424,11 @@ downloaddimension <- function(conn, dbms, topN) {
     SELECT
         covariate_id
     FROM prevalence
-    ORDER BY @(person_count/2 - %s)
-    LIMIT %s
+    ORDER BY @(person_count/2 - @numpersons)
+    LIMIT @topN
     ;
     "
-    # TODO: This should use renderSql.
-    sql = sprintf(sql, numpersons, topN)
+    sql <- renderSql(sql = sql, numpersons = numpersons, topN = topN)$sql
     sql <- translateSql(sql = sql, targetDialect = dbms)$sql
     executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
 

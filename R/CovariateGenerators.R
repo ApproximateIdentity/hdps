@@ -65,7 +65,6 @@ convertData <- function(datadir, covariatesdir, topN) {
 
 
 prioritizeOptCovariates <- function(covariatesdir) {
-    # TODO: Check the logic in this function multiple times!
     infilepath <- file.path(covariatesdir, "outcomes.csv")
     outcomes <- read.table(infilepath, header = TRUE, sep = '\t',
                            col.names = c("new_person_id", "outcome_id"),

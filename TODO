@@ -1,28 +1,25 @@
-* Double-check that algorithm actually does what it's supposed to do
-    -- Drop covariate if fewer than 100 patients have it
-    -- Prioritize covariates and add dropping criterion
-* Add cutoff functionality to generateCovariatesFromData
-* Check if dependencies still hold
+Important:
+* Implement minPatients
+* Double-check that algorithm actually does what it's supposed to do.
+Especially check that the logic in prioritizeOptCovariates is correct!
+
+Less important:
 * Write documentation
-* Add verbose option
+* Add verbose/quiet options in generateDataFromSql
 * Reorder functions to make more sense
 * Do error checking at beginning of covariateGeneration
-* Change the dimension sql files to use sql render.
+* Change dataGenerators to only read .sql files and put READMEs in the folders
 * Make names of functions match names in paper
-* Use dbSendQuery plus fetch (or whatever it's called) to avoid dataframe
-* Do cutoff within each dimension
-* Change cohorts to persons in data generators
-* Check code for inconsistencies in naming 'covariatesdir' vs 'covariatedir'
+
+Optimizations:
+* Change compute priority on per-dimension basis to decrease memory load
+
+Pre-release:
+* Update references to "ApproximateIdentity" to "OHDSI" in INSTALL whenever
+that move occurs...
+
+Overall questions:
 * What is results_schema?
 * Is outcomes format correct? Should there be multiple outcomes?
-* How to handle excluded persons? Probably run cohorts and outcomes at once?
-* Update references to "ApproximateIdentity" to "OHDSI" whenever that move
-occurs...
-
-* Update the interface for covariateGenerators.
-
-* Change dataGenerators to only read .sql files and put READMEs in the folders
-
-* Should topN have a default of (say) 200 in both functions?
-
-* IMPLEMENT minPatients
+* How to handle excluded persons? Probably run cohorts and outcomes at once? Is
+this even something I should care about?
