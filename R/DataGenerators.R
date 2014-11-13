@@ -68,7 +68,12 @@ generateDataFromSql <- function(
     connectionDetails,
     cohortDetails = defaultCohortDetails,
     outcomeDetails = defaultOutcomeDetails,
-    topN = NULL) {
+    topN = NULL,
+    minPatients = NULL) {
+
+    if (!is.null(minPatients)) {
+        cat("Warning: minPatients is not yet implemented\n")
+    }
 
     # Check that the directories and necessary sql files exist.
     if (!validSqlStructure(sqldir)) {

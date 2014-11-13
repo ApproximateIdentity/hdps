@@ -24,3 +24,5 @@ occurs...
 * Change dataGenerators to only read .sql files and put READMEs in the folders
 
 * Should topN have a default of (say) 200 in both functions?
+
+* IMPLEMENT minPatients

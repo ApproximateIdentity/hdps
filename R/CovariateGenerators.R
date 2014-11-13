@@ -20,7 +20,12 @@
 # @author Thomas Nyberg
 
 #' @export
-generateCovariatesFromData <- function(datadir, covariatesdir, topN=NULL) {
+generateCovariatesFromData <- function(datadir, covariatesdir, topN=NULL,
+                                       minPatients = NULL) {
+
+    if (!is.null(minPatients)) {
+        cat("Warning: minPatients is not yet implemented\n")
+    }
 
     unlink(covariatesdir, recursive = TRUE)
     dir.create(covariatesdir)
