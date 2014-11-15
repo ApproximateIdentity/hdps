@@ -75,14 +75,14 @@ generateDataFromSql <- function(
         cat("Warning: minPatients is not yet implemented\n")
     }
 
+    # Clean out any old data in datadir and rebuild necessary directories.
+    cleanDataDir(datadir)
+
     # Check that the directories and necessary sql files exist.
     if (!validSqlStructure(sqldir)) {
         cat("Input sql invalid. Stopping analysis.\n")
         return(NULL)
     }
-
-    # Clean out any old data in datadir and rebuild necessary directories.
-    cleanDataDir(datadir)
 
     # Fill in missing details with defaults.
     cohortDetails <- addDefaults(cohortDetails, defaultCohortDetails)

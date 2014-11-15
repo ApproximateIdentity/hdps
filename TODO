@@ -1,4 +1,5 @@
 Important:
+* Is outcomes is sparse...is that okay?
 * Implement minPatients
 * Double-check that algorithm actually does what it's supposed to do.
 Especially check that the logic in prioritizeOptCovariates is correct!

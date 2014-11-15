@@ -1,7 +1,14 @@
 library(hdps)
+library(tutils)
+library(Cyclops)
+library(CohortMethod)
 
 # Base repository folder. You may want to change this.
 basedir <- getwd()
+
+# File where all statistics will be logged.
+logfile <- file.path(basedir, "log")
+logger <- Logger$new(filepath = logfile)
 
 # Directory containing all input sql.
 sqldir <- file.path(basedir, "sql")
@@ -17,34 +24,66 @@ connectionDetails <- list(
     schema = "mslr_cdm4",
     port = "5439")
 
-# Cohort details.
-rifaximin <- 1735947
-Lactulose <- 987245
-MyocardialInfarction <- 35205189
+drugmap = list(
+    rifaximin = 1735947,
+    Lactulose = 987245)
 
-cohortDetails <- list(
-    drugA = rifaximin,
-    drugB = Lactulose,
-    indicator = MyocardialInfarction)
+outcomemap = list(
+    MyocardialInfarction = 35205189
+)
 
-cat("Generating data...\n")
+# The function that does the analysis.
+main <- function() {
+    # This for loop will iterate over whatever information we have.
+    for (i in 1:10) {
+        # Get the current run's information.
+        runinfo <- list(
+            drugA = 'rifaximin',
+            drugB = 'Lactulose',
+            indicator = 'MyocardialInfarction')
 
-#generateDataFromSql(
-#    sqldir,
-#    datadir,
-#    connectionDetails,
-#    cohortDetails = cohortDetails,
-#    topN = 100)
+        logger$log("* * * Next run * * *\n")
+        logger$log(string(runinfo))
 
-generateSimulatedData(datadir)
+        cohortDetails <- list(
+            drugA = drugmap[runinfo$drugA],
+            drugB = drugmap[runinfo$drugB],
+            indicator = drugmap[runinfo$indicator])
 
-cat("Converting covariates...\n")
-generateCovariatesFromData(datadir, covariatesdir, topN = 100,
-                           minPatients = 100, topK = 300)
+        cat("Generating data...\n")
 
+        #generateDataFromSql(
+        #    sqldir,
+        #    datadir,
+        #    connectionDetails,
+        #    cohortDetails = cohortDetails,
+        #    topN = 100)
 
-# Run Cyclops
-library(Cyclops)
+        #generateSimulatedData(datadir)
+
+        cat("Converting covariates...\n")
+        generateCovariatesFromData(datadir, covariatesdir, topN = 100,
+                                   topK = 300)
+
+        # Run Cyclops
+        sparseData <- getSparseData(covariatesdir)
+
+        cat("Running Cyclops...\n")
+        cyclopsData <- createCyclopsDataFrame(y = sparseData$y,
+                                              sx = sparseData$X,
+                                              modelType = "pr")
+        cyclopsFit <- fitCyclopsModel(cyclopsData, prior = prior("laplace"))
+        pred <- predict(cyclopsFit)
+
+        propdata <- data.frame(
+            TREATMENT = sparseData$y,
+            PROPENSITY_SCORE = pred)
+
+        auc <- psAuc(propdata)
+        logger$log(string(auc))
+    }
+}
+
 
 # Function which loads data into format required by Cyclops.
 getSparseData <- function(covariatesdir) {
@@ -79,12 +118,5 @@ getSparseData <- function(covariatesdir) {
     sparseData
 }
 
-sparseData <- getSparseData(covariatesdir)
 
-cat("Running Cyclops...\n")
-cyclopsData <- createCyclopsDataFrame(y = sparseData$y,
-                                      sx = sparseData$X,
-                                      modelType = "pr")
-cyclopsFit <- fitCyclopsModel(cyclopsData, prior = prior("laplace"))
-summary(cyclopsFit)
-pred <- predict(cyclopsFit)
+main()
