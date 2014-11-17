@@ -19,57 +19,16 @@
 # @author Observational Health Data Sciences and Informatics
 # @author Thomas Nyberg
 
-# Default cohort details.
-rifaximin <- 1735947
-Lactulose <- 987245
-MyocardialInfarction <- 35205189
-
-# TODO: Give these numbers names.
-defaultCohortDetails <- list(
-    target_drug_concept_id = rifaximin,
-    comparator_drug_concept_id = Lactulose,
-    indication_concept_ids = MyocardialInfarction,
-    washout_window = 183,
-    indication_lookback_window = 183,
-    study_start_date = "",
-    study_end_date = "",
-    exclusion_concept_ids = c(
-        4027133,
-        4032243,
-        4146536,
-        2002282,
-        2213572,
-        2005890,
-        43534760,
-        21601019),
-    exposure_table = "DRUG_ERA")
-
-# Default outcome details.
-lowBackPain = 194133
-
-defaultOutcomeDetails <- list(
-    outcome_concept_ids = lowBackPain,
-    # Table containing outcome information. Either 'CONDITION_OCCURRENCE' or
-    # 'COHORT'.
-    outcome_table = 'CONDITION_OCCURRENCE',
-    # Condition type only applies if outcome_table is 'CONDITION_OCCURRENCE'.
-    outcome_condition_type_concept_ids = c(
-        38000215,
-        38000216,
-        38000217,
-        38000218,
-        38000183,
-        38000232))
-
 #' @export
 generateDataFromSql <- function(
     sqldir,
     datadir,
     connectionDetails,
-    cohortDetails = defaultCohortDetails,
-    outcomeDetails = defaultOutcomeDetails,
+    cohortDetails,
+    outcomeDetails,
     topN = 200,
-    minPatients = NULL) {
+    minPatients = NULL,
+    debug = FALSE) {
 
     if (!is.null(minPatients)) {
         cat("Warning: minPatients is not yet implemented\n")
@@ -84,44 +43,40 @@ generateDataFromSql <- function(
         return(NULL)
     }
 
-    # Fill in missing details with defaults.
-    cohortDetails <- addDefaults(cohortDetails, defaultCohortDetails)
-    outcomeDetails <- addDefaults(outcomeDetails, defaultOutcomeDetails)
-
     # Build cohort sql.
     cohortsfile <- file.path(sqldir, "cohorts.sql")
     cohortsql <- readfile(cohortsfile)
 
-    params <- c(
+    cohortparams <- c(
         list(sql = cohortsql,
              cdm_schema = connectionDetails$schema,
              results_schema = connectionDetails$schema),
         cohortDetails)
 
-    cohortsql <- do.call(renderSql, params)$sql
+    cohortsql <- do.call(renderSql, cohortparams)$sql
 
     cohortsql <- translateSql(
         sql = cohortsql,
         sourceDialect = "sql server",
         targetDialect = connectionDetails$dbms)$sql
 
-
     # Build outcome sql.
     outcomesfile <- file.path(sqldir, "outcomes.sql")
     outcomesql <- readfile(outcomesfile)
 
-    params <- c(
+    outcomeparams <- c(
         list(sql = outcomesql,
              cdm_schema = connectionDetails$schema,
              results_schema = connectionDetails$schema),
         outcomeDetails)
 
-    outcomesql <- do.call(renderSql, params)$sql
+    outcomesql <- do.call(renderSql, outcomeparams)$sql
 
     outcomesql <- translateSql(
         sql = outcomesql,
         sourceDialect = "sql server",
         targetDialect = connectionDetails$dbms)$sql
+
 
     dimdir <- file.path(sqldir, "dimensions")
     reqdir <- file.path(dimdir, "required")
@@ -141,6 +96,36 @@ generateDataFromSql <- function(
         dimsqls[[dimname]] <- dimsql
         required[[dimname]] <- (dimpath %in% reqfiles)
     }
+
+
+    if (debug) {
+        cat("Debug mode: No sql statements will be executed\n")
+        cat("Debug log saved in /tmp/debug.log\n")
+
+        debuglogger <- Logger$new(filepath = "/tmp/debug.log")
+
+        debuglogger$log(" * * * Cohort details: * * * ")
+        debuglogger$log(string(cohortDetails))
+        debuglogger$log(" * * * Cohort params: * * * ")
+        debuglogger$log(string(cohortparams))
+        debuglogger$log(" * * * Outcome details: * * * ")
+        debuglogger$log(string(outcomeDetails))
+        debuglogger$log(" * * * Outcome params: * * * ")
+        debuglogger$log(string(outcomeparams))
+        debuglogger$log(" * * * Cohort sql: * * * ")
+        debuglogger$log(cohortsql)
+        debuglogger$log(" * * * Outcome sql: * * * ")
+        debuglogger$log(outcomesql)
+
+        for (dimname in names(dimsql)) {
+            title <- sprintf(" * * * %s sql: * * * ", dimname)
+            debuglogger$log(title)
+            debuglogger$log(dimsqls[[dimname]])
+        }
+
+        return(NULL)
+    }
+
 
     # TODO: Change connectionDetails to use do.call.
     conn <- connect(
