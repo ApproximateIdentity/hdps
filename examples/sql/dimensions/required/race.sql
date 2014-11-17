@@ -3,12 +3,6 @@
  * person is assigned 0 as a covariate value. However, this will not affect the
  * analysis because this variable will have 0 predictive power.
  */
-CREATE TABLE #dim (
-    person_id bigint,
-    covariate_id bigint,
-    covariate_count int
-);
-
 INSERT INTO #dim
 SELECT DISTINCT
     cp.person_id,

@@ -156,8 +156,7 @@ generateDataFromSql <- function(
 
         msg <- sprintf("Building dimension: %s\n", dimname)
         cat(msg)
-        executeSql(conn, dimsql, progressBar = FALSE,
-                   reportOverallTime = FALSE)
+        builddimension(conn, dimsql, connectionDetails$dbms)
 
         cat("Downloading dimension data...\n")
         dim <- downloaddimension(conn, connectionDetails$dbms, topN)
@@ -165,6 +164,23 @@ generateDataFromSql <- function(
     }
 
     dummy <- dbDisconnect(conn)
+}
+
+
+builddimension <- function(conn, dimsql, dbms) {
+    sql <- "
+    CREATE TABLE #dim (
+        person_id bigint,
+        covariate_id bigint,
+        covariate_count int)
+    ;
+    "
+    sql <- translateSql(
+        sql = sql,
+        targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+
+    executeSql(conn, dimsql, progressBar = FALSE, reportOverallTime = FALSE)
 }
 
 

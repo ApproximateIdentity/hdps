@@ -1,10 +1,4 @@
 /* Build procedure occurence dimension table. */
-CREATE TABLE #dim (
-    person_id bigint,
-    covariate_id bigint,
-    covariate_count int
-);
-
 INSERT INTO #dim
 SELECT DISTINCT
     cp.person_id,
