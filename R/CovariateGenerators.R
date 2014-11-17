@@ -32,7 +32,9 @@ generateCovariatesFromData <- function(datadir, covariatesdir, topN = 200,
 
     convertData(datadir, covariatesdir, topN)
     priority <- prioritizeOptCovariates(covariatesdir)
-    addPrioritizedCovariates(covariatesdir, priority, topK)
+    if (!is.null(priority)) {
+        addPrioritizedCovariates(covariatesdir, priority, topK)
+    }
 }
 
 addPrioritizedCovariates <- function(covariatesdir, priority, topK) {
@@ -76,6 +78,11 @@ prioritizeOptCovariates <- function(covariatesdir) {
     covariates <- read.table(infilepath, header = TRUE, sep = '\t',
                              colClasses = c(new_person_id="numeric",
                              new_covariate_id="numeric", "NULL"))
+
+    # Check if there are any optional covariates.
+    if (nrow(covariates) == 0) {
+        return(NULL)
+    }
 
     # Build up priority step-by-step.
     numcovariates <- length(unique(covariates$new_covariate_id))
