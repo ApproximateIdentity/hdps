@@ -97,6 +97,8 @@ generateDataFromSql <- function(
     for (dimpath in dimfiles) {
         dimname <- file_path_sans_ext(basename(dimpath))
         dimsql <- readfile(dimpath)
+        dimsql <- renderSql(sql = dimsql,
+                            cdm_schema = connectionDetails$schema)$sql
         dimsql <- translateSql(
             sql = dimsql,
             targetDialect = connectionDetails$dbms)$sql

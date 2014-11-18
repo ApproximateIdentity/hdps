@@ -3,8 +3,10 @@ Important:
 * Implement minPatients
 * Double-check that algorithm actually does what it's supposed to do.
 Especially check that the logic in prioritizeOptCovariates is correct!
+* Save debuglog in better place
 
 Less important:
+* Add flag to print (cat) to screen when logging
 * Write documentation
 * Add verbose/quiet options in generateDataFromSql
 * Reorder functions to make more sense
