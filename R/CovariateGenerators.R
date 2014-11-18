@@ -67,11 +67,23 @@ convertData <- function(datadir, covariatesdir, topN) {
 
 
 prioritizeOptCovariates <- function(covariatesdir) {
+    # Read in cohorts.
+    infilepath <- file.path(covariatesdir, "cohorts.csv")
+    cohorts <- read.table(infilepath, header = TRUE, sep = '\t',
+                          col.names = c("new_person_id", "outcome_id"),
+                          colClasses = c(new_person_id="numeric",
+                          outcome_id="numeric"))
+
+    # Read in outcomes.
     infilepath <- file.path(covariatesdir, "outcomes.csv")
     outcomes <- read.table(infilepath, header = TRUE, sep = '\t',
                            col.names = c("new_person_id", "outcome_id"),
                            colClasses = c(new_person_id="numeric",
                            outcome_id="numeric"))
+
+    # Outcomes is in a spare format so fill in missing outcomes with 0s.
+    outcomes <- merge(outcomes, cohorts['new_person_id'], all = TRUE)
+    outcomes[is.na(outcomes)] <- 0
 
     infilepath <- file.path(covariatesdir, "optionalcovariates.csv")
     # Do not need the new_covariate_value column.
@@ -145,12 +157,6 @@ prioritizeOptCovariates <- function(covariatesdir) {
 
     # Compute number of people within each cohort with the different
     # covariates.
-    infilepath <- file.path(covariatesdir, "cohorts.csv")
-    cohorts <- read.table(infilepath, header = TRUE, sep = '\t',
-                          col.names = c("new_person_id", "outcome_id"),
-                          colClasses = c(new_person_id="numeric",
-                          outcome_id="numeric"))
-
     covariates <- merge(covariates, cohorts)
     mask <- covariates$outcome_id == 1
     covariates <- covariates[mask,]
