@@ -77,12 +77,19 @@ generateDataFromSql <- function(
         sourceDialect = "sql server",
         targetDialect = connectionDetails$dbms)$sql
 
+    # Helper function to filter out non-sql files.
+    is.sql.file <- function(filename) {
+        return(file_ext(filename) == "sql")
+    }
+    is.sql.file <- Vectorize(is.sql.file)
 
     dimdir <- file.path(sqldir, "dimensions")
     reqdir <- file.path(dimdir, "required")
     optdir <- file.path(dimdir, "optional")
     reqfiles <- list.files(reqdir, full.names=TRUE)
+    reqfiles <- reqfiles[is.sql.file(reqfiles)]
     optfiles <- list.files(optdir, full.names=TRUE)
+    optfiles <- optfiles[is.sql.file(optfiles)]
 
     dimsqls <- list()
     required <- list()

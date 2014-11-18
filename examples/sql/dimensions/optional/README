@@ -1,0 +1,2 @@
+This folder contains sql files for "optional" covariates. That is, these
+covariates will be prioritized and some will be dropped.
