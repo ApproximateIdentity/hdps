@@ -106,13 +106,13 @@ generateDataFromSql <- function(
         required[[dimname]] <- (dimpath %in% reqfiles)
     }
 
-
     if (debug) {
         cat("Debug mode: No sql statements will be executed\n")
         cat("Debug log saved in /tmp/debug.log\n")
 
         debuglogger <- Logger$new(filepath = "/tmp/debug.log")
 
+        # Model parameters.
         debuglogger$log(" * * * Cohort details: * * * ")
         debuglogger$log(string(cohortDetails))
         debuglogger$log(" * * * Cohort params: * * * ")
@@ -121,12 +121,14 @@ generateDataFromSql <- function(
         debuglogger$log(string(outcomeDetails))
         debuglogger$log(" * * * Outcome params: * * * ")
         debuglogger$log(string(outcomeparams))
+
+        # Sql as it would be executed.
         debuglogger$log(" * * * Cohort sql: * * * ")
         debuglogger$log(cohortsql)
         debuglogger$log(" * * * Outcome sql: * * * ")
         debuglogger$log(outcomesql)
 
-        for (dimname in names(dimsql)) {
+        for (dimname in names(dimsqls)) {
             title <- sprintf(" * * * %s sql: * * * ", dimname)
             debuglogger$log(title)
             debuglogger$log(dimsqls[[dimname]])
