@@ -1,0 +1,28 @@
+Important:
+* Is outcomes is sparse...is that okay?
+* Implement minPatients
+* Double-check that algorithm actually does what it's supposed to do.
+Especially check that the logic in prioritizeOptCovariates is correct!
+* Save debuglog in better place
+
+Less important:
+* Add flag to print (cat) to screen when logging
+* Write documentation
+* Add verbose/quiet options in generateDataFromSql
+* Reorder functions to make more sense
+* Do error checking at beginning of covariateGeneration
+* Change dataGenerators to only read .sql files and put READMEs in the folders
+* Make names of functions match names in paper
+
+Optimizations:
+* Change compute priority on per-dimension basis to decrease memory load
+
+Pre-release:
+* Update references to "ApproximateIdentity" to "OHDSI" in INSTALL whenever
+that move occurs...
+
+Overall questions:
+* What is results_schema?
+* Is outcomes format correct? Should there be multiple outcomes?
+* How to handle excluded persons? Probably run cohorts and outcomes at once? Is
+this even something I should care about?

@@ -4,10 +4,10 @@ Version: 0.1
 Authors@R: "Thomas Nyberg <nyberg@ohdsi.org> [aut, cre]"
 Description: Title says it all.
 Depends:
-    R (>= 3.1.1),
     DatabaseConnector,
     SqlRender,
-    tutils,
-    data.table
+    data.table,
+    tools,
+    tutils
 License: Apache Version 2.0
 LazyData: true

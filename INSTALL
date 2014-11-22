@@ -1,8 +1,36 @@
-Installing this requires the R package devtools. Install devtools from cran.
-Next (after cloning this repository) start R and set the working directory to
-the root folder of this repository and then run the following commands:
+Installing this requires the R package devtools. The packages devtools and hdps
+can be installed by running the following commands inside R:
 
-> library(devtools)
+> install.packages("devtools")
+> library("devtools")
+> install_github("ApproximateIdentity/hdps")
+
+If you want to make any changes to the software, instead clone the repo using
+git. This can be done by running the folling command at a terminal ("command
+line"):
+
+> git clone https://github.com/ApproximateIdentity/hdps.git
+
+Next start up R and set the current working directory to the hdps folder
+created in the previous step and then run the following commands:
+
+> install.packages("devtools")
+> library("devtools")
 > install()
 
-If everything works, load the package with library(hdps) and you're all set.
+Load the package with library("hdps") and you don't get an error you should be
+all set.
+
+Note that if you have make installed, you can use make to do this. Run
+
+> make
+
+at the command line to uninstall and reinstall hdps. Run
+
+> make uninstall
+
+to uninstall hdps and run
+
+> make reinstall
+
+to reinstall it.

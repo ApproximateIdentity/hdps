@@ -1,149 +1,203 @@
 library(hdps)
+library(tutils)
+library(Cyclops)
+library(CohortMethod)
 
-# Base repository folder.
-basedir <- Sys.getenv("HDPSDIR")
+# Base repository folder. You may want to change this.
+basedir <- getwd()
+
+# File where all statistics will be logged.
+logfile <- file.path(basedir, "log")
+logger <- Logger$new(filepath = logfile)
+
+# Directory containing all input sql.
+sqldir <- file.path(basedir, "sql")
+datadir <- file.path(basedir, "data")
+covariatesdir <- file.path(basedir, "covariates")
 
 # Login info.
-password <- Sys.getenv("MYPGPASSWORD")
-dbms <- "redshift"
-user <- Sys.getenv("USER")
-server <- "omop-datasets.cqlmv7nlakap.us-east-1.redshift.amazonaws.com/truven"
-schema <- "mslr_cdm4"
-port <- "5439"
+connectionDetails <- list(
+    password = Sys.getenv("MYPGPASSWORD"),
+    dbms = "redshift",
+    user = Sys.getenv("USER"),
+    server = "omop-datasets.cqlmv7nlakap.us-east-1.redshift.amazonaws.com/truven",
+    #schema = "ccae_cdm4",
+    schema = "mslr_cdm4",
+    port = "5439")
 
-# Drugs to compare.
-Erythromycin = 1746940
-Amoxicillin = 1713332
+# Load in study data information.
+filepath <- "OMOP2011_drugs_w_indications_comparators_23aug2012.csv"
+studydata <- read.csv(
+    filepath,
+    header = TRUE,
+    col.names = c("drugA", "drugAname", "indicator",
+                  "indicatorname", "drugB", "drugBname"),
+    stringsAsFactors = FALSE)
 
-# Condition to check for.
-MyocardialInfarction = 35205189
+cohortDetails <- list(
+    target_drug_concept_id = NULL,
+    comparator_drug_concept_id = NULL,
+    indication_concept_ids = NULL,
+    washout_window = 183,
+    indication_lookback_window = 183,
+    study_start_date = "",
+    study_end_date = "",
+    # TODO: What do these numbers mean?
+    exclusion_concept_ids = c(
+        4027133,
+        4032243,
+        4146536,
+        2002282,
+        2213572,
+        2005890,
+        43534760,
+        21601019),
+    exposure_table = "DRUG_ERA")
 
-hdps = Hdps$new()
-#hdps$toggledebug()
+# Default outcome details.
+lowBackPain = 194133
 
-hdps$connect(dbms, user, password, server, port, schema)
+outcomeDetails <- list(
+    outcome_concept_ids = lowBackPain,
+    # Table containing outcome information. Either 'CONDITION_OCCURRENCE' or
+    # 'COHORT'.
+    outcome_table = 'CONDITION_OCCURRENCE',
+    # Condition type only applies if outcome_table is 'CONDITION_OCCURRENCE'.
+    outcome_condition_type_concept_ids = c(
+        38000215,
+        38000216,
+        38000217,
+        38000218,
+        38000183,
+        38000232))
 
-hdps$buildCohorts(Erythromycin, Amoxicillin, MyocardialInfarction)
+# The function that does the analysis.
+main <- function(debug = FALSE) {
+    #numrows <- nrow(studydata)
+    #debug <- FALSE
+    i <- 1
+    numrows <- 1
+    timer <- Timer$new()
+    for (i in 1:numrows) {
+        # Get the current run's information.
+        studydatum <- studydata[i,]
+        #runinfo <- list(
+            #target_drug_concept_id = studydatum$drugAname,
+            #comparator_drug_concept_id = studydatum$drugBname,
+            #indication_concept_ids = studydatum$indicatorname)
 
-hdps$getCohortSize()
-
-# Build condition era dimension table.
-parametrizedSql = "
-CREATE TABLE #dim (
-    person_id bigint,
-    concept_id bigint,
-    count int
-);
-
-INSERT INTO #dim
-SELECT DISTINCT
-    cp.person_id,
-    ce.condition_concept_id as concept_id,
-    COUNT(ce.condition_concept_id) as count
-FROM
-    #cohort_person cp INNER JOIN mslr_cdm4.condition_era ce
-        ON cp.person_id = ce.person_id
-WHERE
-    cp.cohort_start_date < ce.condition_era_start_date
-    AND ce.condition_era_start_date <= cp.cohort_end_date
-GROUP BY
-    cp.person_id,
-    ce.condition_concept_id
-;
-"
-hdps$buildDimension(parametrizedSql)
-
-covariates <- hdps$extractCovariates(cutoff = 50)
-
-# Build drug era dimension table.
-parametrizedSql = "
-CREATE TABLE #dim (
-    person_id bigint,
-    concept_id bigint,
-    count int
-);
-
-INSERT INTO #dim
-SELECT DISTINCT
-    cp.person_id,
-    de.drug_concept_id as concept_id,
-    COUNT(de.drug_concept_id) as count
-FROM
-    #cohort_person cp INNER JOIN mslr_cdm4.drug_era de
-        ON cp.person_id = de.person_id
-WHERE
-    cp.cohort_start_date < de.drug_era_start_date
-    AND de.drug_era_start_date <= cp.cohort_end_date
-GROUP BY
-    cp.person_id,
-    de.drug_concept_id
-;
-"
-hdps$buildDimension(parametrizedSql)
-
-new_covariates <- hdps$extractCovariates(cutoff = 50)
-covariates <- rbind(covariates, new_covariates)
-
-# Build visit occurence dimension table.
-parametrizedSql = "
-CREATE TABLE #dim (
-    person_id bigint,
-    concept_id bigint,
-    count int
-);
-
-INSERT INTO #dim
-SELECT DISTINCT
-    cp.person_id,
-    vo.visit_occurrence_id as concept_id,
-    COUNT(vo.visit_occurrence_id) as count
-FROM
-    #cohort_person cp INNER JOIN mslr_cdm4.visit_occurrence vo
-        ON cp.person_id = vo.person_id
-WHERE
-    cp.cohort_start_date < vo.visit_start_date
-    AND vo.visit_start_date <= cp.cohort_end_date
-GROUP BY
-    cp.person_id,
-    vo.visit_occurrence_id
-;
-"
-hdps$buildDimension(parametrizedSql)
-
-new_covariates <- hdps$extractCovariates(cutoff = 50)
-covariates <- rbind(covariates, new_covariates)
+        runinfo <- list(
+            target_drug_concept_id = 'rifaximin',
+            comparator_drug_concept_id = 'Lactulose',
+            indication_concept_ids = 'MyocardialInfarction')
 
 
-# TODO: Create the dimensions table one time and then add the truncate table
-# portion of the code to the buildDimension() method.
 
-# Build procedure occurence dimension table.
-parametrizedSql = "
-CREATE TABLE #dim (
-    person_id bigint,
-    concept_id bigint,
-    count int
-);
+        infostring <- sprintf("* * * On run %s out of %s * * *\n", i, numrows)
 
-INSERT INTO #dim
-SELECT DISTINCT
-    cp.person_id,
-    po.procedure_occurrence_id as concept_id,
-    COUNT(po.procedure_occurrence_id) as count
-FROM
-    #cohort_person cp INNER JOIN mslr_cdm4.procedure_occurrence po
-        ON cp.person_id = po.person_id
-WHERE
-    cp.cohort_start_date < po.procedure_date
-    AND po.procedure_date <= cp.cohort_end_date
-GROUP BY
-    cp.person_id,
-    po.procedure_occurrence_id
-;
-"
-hdps$buildDimension(parametrizedSql)
+        cat(infostring)
+        logger$log(infostring)
+        logger$log(string(runinfo))
 
-new_covariates <- hdps$extractCovariates(cutoff = 50)
-covariates <- rbind(covariates, new_covariates)
+        #cohortDetails[['target_drug_concept_id']] <- studydatum$drugA
+        #cohortDetails[['comparator_drug_concept_id']] <- studydatum$drugB
+        #cohortDetails[['indication_concept_ids']] <- studydatum$indicator
+ 
+        cohortDetails[['target_drug_concept_id']] <- 1735947
+        cohortDetails[['comparator_drug_concept_id']] <- 987245
+        cohortDetails[['indication_concept_ids']] <- 35205189
 
-hdps$disconnect()
+        cat("Generating data...\n")
+
+        generateDataFromSql(
+            sqldir,
+            datadir,
+            connectionDetails,
+            cohortDetails,
+            outcomeDetails,
+            topN = 100,
+            debug = debug)
+
+        # REMOVE
+        return()
+
+        # For debug reasons.
+        if (debug) {
+            next
+        }
+
+        #generateSimulatedData(datadir)
+
+        cat("Converting covariates...\n")
+        generateCovariatesFromData(datadir, covariatesdir, topN = 100,
+                                   topK = 300)
+
+        # REMOVE
+        return()
+        # Run Cyclops
+        sparseData <- getSparseData(covariatesdir)
+
+        cat("Running Cyclops...\n")
+        cyclopsData <- createCyclopsDataFrame(y = sparseData$y,
+                                              sx = sparseData$X,
+                                              modelType = "pr")
+        cyclopsFit <- fitCyclopsModel(cyclopsData, prior = prior("laplace"))
+        pred <- predict(cyclopsFit)
+
+        propdata <- data.frame(
+            TREATMENT = sparseData$y,
+            PROPENSITY_SCORE = pred)
+
+        logger$log(sprintf("Number of patients: %s", sparseData$numpersons))
+        logger$log(sprintf("Number of covariates: %s\n",
+                           sparseData$numcovariates))
+
+        auc <- psAuc(propdata)
+        logger$log(string(auc))
+
+        elapsedtime <- sprintf("Elapsed time in run: %s\n", timer$split())
+        cat(elapsedtime)
+        logger$log(elapsedtime)
+    }
+}
+
+
+# Function which loads data into format required by Cyclops.
+getSparseData <- function(covariatesdir) {
+    covariatesfile <- file.path(covariatesdir, "covariates.csv")
+
+    cohortsfile <- file.path(covariatesdir, "cohorts.csv")
+
+    covariates <- read.table(covariatesfile, header = TRUE, sep = '\t',
+                             col.names = c("new_person_id",
+                             "new_covariate_id", "new_covariate_value"),
+                             colClasses = c(new_person_id="numeric",
+                             new_covariate_id="numeric",
+                             new_covariate_value="numeric"))
+
+    cohorts <- read.table(cohortsfile, header = TRUE, sep = '\t', col.names =
+                          c("new_person_id", "cohort_id"), colClasses =
+                          c(new_person_id="numeric", cohort_id="numeric"))
+
+    numcovariates <- length(unique(covariates$new_covariate_id))
+    numpersons <- length(unique(cohorts$new_person_id))
+
+    # TODO: This works because it is assumed that the persons are labeled
+    # consecutively without any holes. This should probably be enforced through
+    # checks somewhere or incomprehensible errors might be thrown.
+    X <- sparseMatrix(i = covariates$new_person_id,
+                      j = covariates$new_covariate_id,
+                      x = covariates$new_covariate_value)
+
+    # TODO: This should already be ordered, but it is essential that it be so.
+    # This should probably be enforced with a check somewhere.
+    cohorts <- cohorts[order(cohorts$new_person_id),]
+    y <- cohorts$cohort_id
+
+    sparseData <- list(X = X, y = y, numpersons = numpersons,
+                       numcovariates = numcovariates)
+    sparseData
+}
+
+
+main(debug = FALSE)

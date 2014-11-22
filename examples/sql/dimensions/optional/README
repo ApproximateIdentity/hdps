@@ -1,0 +1,15 @@
+This folder contains sql files for "optional" covariates. That is, these
+covariates will be prioritized and some will be dropped. The user needs to
+populate a table of the following format:
+
+
+    CREATE TABLE #dim (
+        person_id bigint,
+        covariate_id varchar,
+        covariate_count int)
+    ;
+
+The use should _not_ create this table (it is created already before the sql in
+this file is executed) and the user should not drop/truncate it afterwards. The
+user is free to create any other temporary tables as necessary, but those need
+to be dropped by the user when finished.
