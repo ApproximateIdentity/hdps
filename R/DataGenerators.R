@@ -180,7 +180,7 @@ builddimension <- function(conn, dimsql, dbms) {
     sql <- "
     CREATE TABLE #dim (
         person_id bigint,
-        covariate_id bigint,
+        covariate_id varchar,
         covariate_count int)
     ;
     "
@@ -394,7 +394,7 @@ downloaddimension <- function(conn, dbms, topN) {
     # Create prevalence table.
     sql = "
     CREATE TABLE #prevalence (
-        covariate_id bigint,
+        covariate_id varchar,
         person_count int
     );
 
@@ -426,7 +426,7 @@ downloaddimension <- function(conn, dbms, topN) {
     # Get prevalent ids.
     sql = "
     CREATE TABLE #prevalent_ids (
-        covariate_id bigint
+        covariate_id varchar
     )
     ;
 
