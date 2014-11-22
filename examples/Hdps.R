@@ -21,43 +21,110 @@ connectionDetails <- list(
     dbms = "redshift",
     user = Sys.getenv("USER"),
     server = "omop-datasets.cqlmv7nlakap.us-east-1.redshift.amazonaws.com/truven",
+    #schema = "ccae_cdm4",
     schema = "mslr_cdm4",
     port = "5439")
 
-drugmap = list(
-    rifaximin = 1735947,
-    Lactulose = 987245)
+# Load in study data information.
+filepath <- "OMOP2011_drugs_w_indications_comparators_23aug2012.csv"
+studydata <- read.csv(
+    filepath,
+    header = TRUE,
+    col.names = c("drugA", "drugAname", "indicator",
+                  "indicatorname", "drugB", "drugBname"),
+    stringsAsFactors = FALSE)
 
-outcomemap = list(
-    MyocardialInfarction = 35205189
-)
+cohortDetails <- list(
+    target_drug_concept_id = NULL,
+    comparator_drug_concept_id = NULL,
+    indication_concept_ids = NULL,
+    washout_window = 183,
+    indication_lookback_window = 183,
+    study_start_date = "",
+    study_end_date = "",
+    # TODO: What do these numbers mean?
+    exclusion_concept_ids = c(
+        4027133,
+        4032243,
+        4146536,
+        2002282,
+        2213572,
+        2005890,
+        43534760,
+        21601019),
+    exposure_table = "DRUG_ERA")
+
+# Default outcome details.
+lowBackPain = 194133
+
+outcomeDetails <- list(
+    outcome_concept_ids = lowBackPain,
+    # Table containing outcome information. Either 'CONDITION_OCCURRENCE' or
+    # 'COHORT'.
+    outcome_table = 'CONDITION_OCCURRENCE',
+    # Condition type only applies if outcome_table is 'CONDITION_OCCURRENCE'.
+    outcome_condition_type_concept_ids = c(
+        38000215,
+        38000216,
+        38000217,
+        38000218,
+        38000183,
+        38000232))
 
 # The function that does the analysis.
-main <- function() {
-    # This for loop will iterate over whatever information we have.
-    for (i in 1:10) {
+main <- function(debug = FALSE) {
+    #numrows <- nrow(studydata)
+    #debug <- FALSE
+    i <- 1
+    numrows <- 1
+    timer <- Timer$new()
+    for (i in 1:numrows) {
         # Get the current run's information.
-        runinfo <- list(
-            drugA = 'rifaximin',
-            drugB = 'Lactulose',
-            indicator = 'MyocardialInfarction')
+        studydatum <- studydata[i,]
+        #runinfo <- list(
+            #target_drug_concept_id = studydatum$drugAname,
+            #comparator_drug_concept_id = studydatum$drugBname,
+            #indication_concept_ids = studydatum$indicatorname)
 
-        logger$log("* * * Next run * * *\n")
+        runinfo <- list(
+            target_drug_concept_id = 'rifaximin',
+            comparator_drug_concept_id = 'Lactulose',
+            indication_concept_ids = 'MyocardialInfarction')
+
+
+
+        infostring <- sprintf("* * * On run %s out of %s * * *\n", i, numrows)
+
+        cat(infostring)
+        logger$log(infostring)
         logger$log(string(runinfo))
 
-        cohortDetails <- list(
-            drugA = drugmap[runinfo$drugA],
-            drugB = drugmap[runinfo$drugB],
-            indicator = drugmap[runinfo$indicator])
+        #cohortDetails[['target_drug_concept_id']] <- studydatum$drugA
+        #cohortDetails[['comparator_drug_concept_id']] <- studydatum$drugB
+        #cohortDetails[['indication_concept_ids']] <- studydatum$indicator
+ 
+        cohortDetails[['target_drug_concept_id']] <- 1735947
+        cohortDetails[['comparator_drug_concept_id']] <- 987245
+        cohortDetails[['indication_concept_ids']] <- 35205189
 
         cat("Generating data...\n")
 
-        #generateDataFromSql(
-        #    sqldir,
-        #    datadir,
-        #    connectionDetails,
-        #    cohortDetails = cohortDetails,
-        #    topN = 100)
+        generateDataFromSql(
+            sqldir,
+            datadir,
+            connectionDetails,
+            cohortDetails,
+            outcomeDetails,
+            topN = 100,
+            debug = debug)
+
+        # REMOVE
+        return()
+
+        # For debug reasons.
+        if (debug) {
+            next
+        }
 
         #generateSimulatedData(datadir)
 
@@ -65,6 +132,8 @@ main <- function() {
         generateCovariatesFromData(datadir, covariatesdir, topN = 100,
                                    topK = 300)
 
+        # REMOVE
+        return()
         # Run Cyclops
         sparseData <- getSparseData(covariatesdir)
 
@@ -79,8 +148,16 @@ main <- function() {
             TREATMENT = sparseData$y,
             PROPENSITY_SCORE = pred)
 
+        logger$log(sprintf("Number of patients: %s", sparseData$numpersons))
+        logger$log(sprintf("Number of covariates: %s\n",
+                           sparseData$numcovariates))
+
         auc <- psAuc(propdata)
         logger$log(string(auc))
+
+        elapsedtime <- sprintf("Elapsed time in run: %s\n", timer$split())
+        cat(elapsedtime)
+        logger$log(elapsedtime)
     }
 }
 
@@ -102,6 +179,9 @@ getSparseData <- function(covariatesdir) {
                           c("new_person_id", "cohort_id"), colClasses =
                           c(new_person_id="numeric", cohort_id="numeric"))
 
+    numcovariates <- length(unique(covariates$new_covariate_id))
+    numpersons <- length(unique(cohorts$new_person_id))
+
     # TODO: This works because it is assumed that the persons are labeled
     # consecutively without any holes. This should probably be enforced through
     # checks somewhere or incomprehensible errors might be thrown.
@@ -114,9 +194,10 @@ getSparseData <- function(covariatesdir) {
     cohorts <- cohorts[order(cohorts$new_person_id),]
     y <- cohorts$cohort_id
 
-    sparseData <- list(X = X, y = y)
+    sparseData <- list(X = X, y = y, numpersons = numpersons,
+                       numcovariates = numcovariates)
     sparseData
 }
 
 
-main()
+main(debug = FALSE)
