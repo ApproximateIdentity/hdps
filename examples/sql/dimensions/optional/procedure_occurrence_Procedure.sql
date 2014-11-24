@@ -1,4 +1,5 @@
-/* Build procedure occurrence dimension table. */
+/* Build procedure occurrence dimension table. This uses the ICD-9-Procedure
+ * vocabulary. */
 INSERT INTO #dim
 SELECT
     cp.person_id,
