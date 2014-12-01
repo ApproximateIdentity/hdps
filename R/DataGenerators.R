@@ -23,6 +23,7 @@
 generateDataFromSql <- function(
     sqldir,
     datadir,
+    tmpdir = NULL,
     connectionDetails,
     cohortDetails,
     outcomeDetails,
@@ -30,9 +31,17 @@ generateDataFromSql <- function(
     minPatients = NULL,
     debug = FALSE) {
 
+    if (is.null(tmpdir)) {
+        tmpdir <- tempdir()
+    }
+
     if (!is.null(minPatients)) {
         cat("Warning: minPatients is not yet implemented\n")
     }
+
+    # Setup sql logger.
+    logfile <- file.path(tmpdir, "sql.log")
+    sqllogger <- Logger$new(filepath = logfile, truncate = TRUE)
 
     # Clean out any old data in datadir and rebuild necessary directories.
     cleanDataDir(datadir)
@@ -152,6 +161,7 @@ generateDataFromSql <- function(
 
     cat("Downloading cohorts data.\n")
     cohorts <- downloadcohorts(conn, connectionDetails$dbms)
+    numpersons <- length(unique(cohorts$person_id))
     savecohorts(datadir, cohorts)
 
     cat("Building outcomes.\n")
@@ -167,18 +177,27 @@ generateDataFromSql <- function(
 
         msg <- sprintf("Building dimension: %s\n", dimname)
         cat(msg)
-        builddimension(conn, dimsql, connectionDetails$dbms)
+        builddimension(conn, dimsql, connectionDetails$dbms, topN, numpersons)
 
         cat("Downloading dimension data...\n")
-        dim <- downloaddimension(conn, connectionDetails$dbms, topN)
+        dim <- downloaddimension(conn, connectionDetails$dbms)
         savedimension(datadir, dimname, dim, required[[dimname]])
+
+        cleandimension(conn, connectionDetails$dbms)
     }
 
     dummy <- dbDisconnect(conn)
 }
 
 
-builddimension <- function(conn, dimsql, dbms) {
+builddimension <- function(conn, dimsql, dbms, topN, numpersons = NULL) {
+    # TODO: Probably should just return everything immediately if topN is
+    # NULL to speed up on server computations.
+    if (is.null(topN)) {
+        # Infinity.
+        topN <- 1000000000
+    }
+
     sql <- "
     CREATE TABLE #dim (
         person_id bigint,
@@ -192,6 +211,171 @@ builddimension <- function(conn, dimsql, dbms) {
     executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
 
     executeSql(conn, dimsql, progressBar = FALSE, reportOverallTime = FALSE)
+
+    # Create prevalence table.
+    sql = "
+    CREATE TABLE #prevalence (
+        covariate_id varchar,
+        person_count int
+    );
+
+    INSERT INTO #prevalence
+    SELECT
+        covariate_id,
+        COUNT(DISTINCT(person_id))
+    FROM
+        #dim
+    GROUP BY
+        covariate_id
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+
+    # Get prevalent ids.
+    sql = "
+    CREATE TABLE #prevalent_ids (
+        covariate_id varchar
+    )
+    ;
+
+    INSERT INTO prevalent_ids
+    SELECT
+        covariate_id
+    FROM prevalence
+    ORDER BY @(person_count/2 - @numpersons)
+    LIMIT @topN
+    ;
+    "
+    sql <- renderSql(sql = sql, numpersons = numpersons, topN = topN)$sql
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+}
+
+
+downloaddimension <- function(conn, dbms) {
+    sql = "
+    SELECT
+        d.person_id,
+        d.covariate_id,
+        d.covariate_count
+    FROM
+        #dim d INNER JOIN #prevalent_ids p
+            ON d.covariate_id = p.covariate_id
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    dim <- dbGetQuery(conn, sql)
+
+    dim
+}
+
+
+cleandimension <- function(conn, dbms) {
+    # Clean out temp tables.
+    sql = "
+    TRUNCATE TABLE #dim;
+    DROP TABLE #dim;
+
+    TRUNCATE TABLE #prevalence;
+    DROP TABLE #prevalence;
+
+    TRUNCATE TABLE #prevalent_ids;
+    DROP TABLE #prevalent_ids;
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+}
+
+
+remove.downloaddimension <- function(conn, dbms, topN) {
+    # TODO: Probably should just return everything immediately if topN is
+    # NULL to speed up on server computations.
+    if (is.null(topN)) {
+        # Infinity.
+        topN <- 1000000000
+    }
+    # Create prevalence table.
+    sql = "
+    CREATE TABLE #prevalence (
+        covariate_id varchar,
+        person_count int
+    );
+
+    INSERT INTO #prevalence
+    SELECT
+        covariate_id,
+        COUNT(DISTINCT(person_id))
+    FROM
+        #dim
+    GROUP BY
+        covariate_id
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+
+
+    # TODO: This should probably be called once when building the cohorts.
+    # Get cohort size.
+    sql = "
+    SELECT COUNT(DISTINCT(person_id))
+    FROM cohort_person
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    result <- dbGetQuery(conn, sql)
+    numpersons = result$count
+
+    # Get prevalent ids.
+    sql = "
+    CREATE TABLE #prevalent_ids (
+        covariate_id varchar
+    )
+    ;
+
+    INSERT INTO prevalent_ids
+    SELECT
+        covariate_id
+    FROM prevalence
+    ORDER BY @(person_count/2 - @numpersons)
+    LIMIT @topN
+    ;
+    "
+    sql <- renderSql(sql = sql, numpersons = numpersons, topN = topN)$sql
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+
+    sql = "
+    SELECT
+        d.person_id,
+        d.covariate_id,
+        d.covariate_count
+    FROM
+        #dim d INNER JOIN #prevalent_ids p
+            ON d.covariate_id = p.covariate_id
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    dim <- dbGetQuery(conn, sql)
+
+    # Clean out temp tables.
+    sql = "
+    TRUNCATE TABLE #dim;
+    DROP TABLE #dim;
+
+    TRUNCATE TABLE #prevalence;
+    DROP TABLE #prevalence;
+
+    TRUNCATE TABLE #prevalent_ids;
+    DROP TABLE #prevalent_ids;
+    ;
+    "
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+
+    dim
 }
 
 
@@ -386,96 +570,6 @@ downloadcohorts <- function(conn, dbms) {
 savecohorts <- function(datadir, cohorts) {
     filepath <- file.path(datadir, "cohorts.csv")
     write.table(cohorts, file=filepath, sep="\t", row.names=FALSE)
-}
-
-
-downloaddimension <- function(conn, dbms, topN) {
-    # TODO: Probably should just return everything immediately if topN is
-    # NULL to speed up on server computations.
-    if (is.null(topN)) {
-        # Infinity.
-        topN <- 1000000000
-    }
-    # Create prevalence table.
-    sql = "
-    CREATE TABLE #prevalence (
-        covariate_id varchar,
-        person_count int
-    );
-
-    INSERT INTO #prevalence
-    SELECT
-        covariate_id,
-        COUNT(DISTINCT(person_id))
-    FROM
-        #dim
-    GROUP BY
-        covariate_id
-    ;
-    "
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
-
-
-    # TODO: This should probably be called once when building the cohorts.
-    # Get cohort size.
-    sql = "
-    SELECT COUNT(DISTINCT(person_id))
-    FROM cohort_person
-    ;
-    "
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    result <- dbGetQuery(conn, sql)
-    numpersons = result$count
-
-    # Get prevalent ids.
-    sql = "
-    CREATE TABLE #prevalent_ids (
-        covariate_id varchar
-    )
-    ;
-
-    INSERT INTO prevalent_ids
-    SELECT
-        covariate_id
-    FROM prevalence
-    ORDER BY @(person_count/2 - @numpersons)
-    LIMIT @topN
-    ;
-    "
-    sql <- renderSql(sql = sql, numpersons = numpersons, topN = topN)$sql
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
-
-    sql = "
-    SELECT
-        d.person_id,
-        d.covariate_id,
-        d.covariate_count
-    FROM
-        #dim d INNER JOIN #prevalent_ids p
-            ON d.covariate_id = p.covariate_id
-    ;
-    "
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    dim <- dbGetQuery(conn, sql)
-
-    # Clean out temp tables.
-    sql = "
-    TRUNCATE TABLE #dim;
-    DROP TABLE #dim;
-
-    TRUNCATE TABLE #prevalence;
-    DROP TABLE #prevalence;
-
-    TRUNCATE TABLE #prevalent_ids;
-    DROP TABLE #prevalent_ids;
-    ;
-    "
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
-
-    dim
 }
 
 
