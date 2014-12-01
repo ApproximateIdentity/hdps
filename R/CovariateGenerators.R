@@ -20,26 +20,40 @@
 # @author Thomas Nyberg
 
 #' @export
-generateCovariatesFromData <- function(datadir, covariatesdir, topN = 200,
-                                       minPatients = NULL, topK = 500) {
+generateCovariatesFromData <- function(
+    datadir,
+    covariatesdir,
+    tmpdir = NULL,
+    topN = 200,
+    minPatients = NULL,
+    topK = 500) {
+
+    if (is.null(tmpdir)) {
+        tmpdir <- tempdir()
+    }
 
     if (!is.null(minPatients)) {
         cat("Warning: minPatients is not yet implemented\n")
     }
 
-    unlink(covariatesdir, recursive = TRUE)
-    dir.create(covariatesdir)
+    # Clear out target directories. Caution! This must be done even if tmpdir
+    # is NULL because tempdir() apparently returns the same temporary directory
+    # during one session.
+    for (dirpath in c(covariatesdir, tmpdir)) {
+        unlink(dirpath, recursive = TRUE)
+        dir.create(dirpath)
+    }
 
-    convertData(datadir, covariatesdir, topN)
-    priority <- prioritizeOptCovariates(covariatesdir)
+    convertData(datadir, covariatesdir, tmpdir, topN)
+    priority <- prioritizeOptCovariates(covariatesdir, tmpdir)
     if (!is.null(priority)) {
-        addPrioritizedCovariates(covariatesdir, priority, topK)
+        addPrioritizedCovariates(covariatesdir, tmpdir, priority, topK)
     }
 }
 
-addPrioritizedCovariates <- function(covariatesdir, priority, topK) {
+addPrioritizedCovariates <- function(covariatesdir, tmpdir, priority, topK) {
 
-    infilepath <- file.path(covariatesdir, "optionalcovariates.csv")
+    infilepath <- file.path(tmpdir, "optionalcovariates.csv")
     optionalcovariates <- read.table(infilepath, header = TRUE, sep = '\t',
                                      col.names = c("new_person_id",
                                      "new_covariate_id", "new_covariate_value"),
@@ -59,14 +73,14 @@ addPrioritizedCovariates <- function(covariatesdir, priority, topK) {
 }
 
 
-convertData <- function(datadir, covariatesdir, topN) {
+convertData <- function(datadir, covariatesdir, tmpdir, topN) {
     pidMap <- convertCohorts(datadir, covariatesdir)
     convertOutcomes(datadir, covariatesdir, pidMap)
-    convertCovariates(datadir, covariatesdir, pidMap, topN)
+    convertCovariates(datadir, covariatesdir, tmpdir, pidMap, topN)
 }
 
 
-prioritizeOptCovariates <- function(covariatesdir) {
+prioritizeOptCovariates <- function(covariatesdir, tmpdir) {
     # Read in cohorts.
     infilepath <- file.path(covariatesdir, "cohorts.csv")
     cohorts <- read.table(infilepath, header = TRUE, sep = '\t',
@@ -85,7 +99,7 @@ prioritizeOptCovariates <- function(covariatesdir) {
     outcomes <- merge(outcomes, cohorts['new_person_id'], all = TRUE)
     outcomes[is.na(outcomes)] <- 0
 
-    infilepath <- file.path(covariatesdir, "optionalcovariates.csv")
+    infilepath <- file.path(tmpdir, "optionalcovariates.csv")
     # Do not need the new_covariate_value column.
     covariates <- read.table(infilepath, header = TRUE, sep = '\t',
                              colClasses = c(new_person_id="numeric",
@@ -211,7 +225,7 @@ convertCohorts <- function(datadir, covariatesdir) {
     cohorts$new_person_id <- 1:length(cohorts$old_person_id)
 
     pidMap <- cohorts[, c('new_person_id', 'old_person_id')]
-    outfilepath <- file.path(covariatesdir, "personMap.csv")
+    outfilepath <- file.path(covariatesdir, "cohortMap.csv")
     write.table(pidMap, file = outfilepath, sep = '\t', row.names = FALSE)
 
     cohorts <- cohorts[, c('new_person_id', 'cohort_id')]
@@ -222,13 +236,13 @@ convertCohorts <- function(datadir, covariatesdir) {
 }
 
 
-convertCovariates <- function(datadir, covariatesdir, pidMap, topN) {
+convertCovariates <- function(datadir, covariatesdir, tmpdir, pidMap, topN) {
     if (is.null(topN)) {
         topN <- 1e10
     }
 
     reqoutfilepath <- file.path(covariatesdir, "covariates.csv")
-    optoutfilepath <- file.path(covariatesdir, "optionalcovariates.csv")
+    optoutfilepath <- file.path(tmpdir, "optionalcovariates.csv")
     covmapoutfilepath <- file.path(covariatesdir, "covariateMap.csv")
 
     reqdir <- file.path(datadir, "dimensions", "required")
