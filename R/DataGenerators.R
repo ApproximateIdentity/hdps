@@ -222,6 +222,9 @@ generateSimulatedData <- function(
         person_id = pids,
         outcome_id = outcomeids)
 
+    # outcomes should be sparse!
+    outcomes <- outcomes[outcomes$outcome_id == 1,]
+
     filepath <- file.path(datadir, "outcomes.csv")
     write.table(outcomes, file=filepath, sep="\t", row.names=FALSE)
 
