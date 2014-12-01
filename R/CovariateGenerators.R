@@ -36,13 +36,9 @@ generateCovariatesFromData <- function(
         cat("Warning: minPatients is not yet implemented\n")
     }
 
-    # Clear out target directories. Caution! This must be done even if tmpdir
-    # is NULL because tempdir() apparently returns the same temporary directory
-    # during one session.
-    for (dirpath in c(covariatesdir, tmpdir)) {
-        unlink(dirpath, recursive = TRUE)
-        dir.create(dirpath)
-    }
+    # Clean out any old files.
+    unlink(covariatesdir, recursive = TRUE)
+    dir.create(covariatesdir)
 
     convertData(datadir, covariatesdir, tmpdir, topN)
     priority <- prioritizeOptCovariates(covariatesdir, tmpdir)

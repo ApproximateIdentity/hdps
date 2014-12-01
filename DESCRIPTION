@@ -7,7 +7,6 @@ Depends:
     DatabaseConnector,
     SqlRender,
     data.table,
-    tools,
-    tutils
+    tools
 License: Apache Version 2.0
 LazyData: true

@@ -21,11 +21,12 @@
 
 #' @export
 generateDataFromSql <- function(
-    sqldir,
-    datadir,
     connectionDetails,
     cohortDetails,
     outcomeDetails,
+    sqldir,
+    datadir,
+    tmpdir = NULL,
     topN = 200,
     minPatients = NULL,
     debug = FALSE) {
@@ -34,14 +35,44 @@ generateDataFromSql <- function(
         cat("Warning: minPatients is not yet implemented\n")
     }
 
+    if (is.null(topN)) {
+        # Infinity.
+        topN <- 1000000000
+    }
+
+    if (is.null(tmpdir)) {
+        tmpdir <- tempdir()
+    } else {
+        # Clean out any old files.
+        unlink(tmpdir, recursive = TRUE)
+        dir.create(tmpdir)
+    }
+
     # Clean out any old data in datadir and rebuild necessary directories.
     cleanDataDir(datadir)
+
+    # Setup sql logger.
+    logfile <- file.path(tmpdir, "sql.log")
+    sqllogger <- Logger$new(logfile, truncate = TRUE)
 
     # Check that the directories and necessary sql files exist.
     if (!validSqlStructure(sqldir)) {
         cat("Input sql invalid. Stopping analysis.\n")
         return(NULL)
     }
+
+
+    if (!debug) {
+        # TODO: Change connectionDetails to use do.call.
+        conn <- connect(
+            dbms=connectionDetails$dbms,
+            connectionDetails$user,
+            connectionDetails$password,
+            connectionDetails$server,
+            connectionDetails$port,
+            connectionDetails$schema)
+    }
+
 
     # Build cohort sql.
     cohortsfile <- file.path(sqldir, "cohorts.sql")
@@ -60,6 +91,22 @@ generateDataFromSql <- function(
         sourceDialect = "sql server",
         targetDialect = connectionDetails$dbms)$sql
 
+    sqllogger$log(cohortsql)
+
+    if (!debug) {
+        cat("Building cohorts.\n")
+        executeSql(conn, cohortsql, progressBar = FALSE,
+                   reportOverallTime = FALSE)
+
+        cat("Downloading cohorts data.\n")
+        cohorts <- downloadcohorts(conn, connectionDetails$dbms)
+        numpersons <- length(unique(cohorts$person_id))
+        savecohorts(datadir, cohorts)
+    } else {
+        cat("(Debug mode) Building cohorts.\n")
+        numpersons <- "NULL"
+    }
+
     # Build outcome sql.
     outcomesfile <- file.path(sqldir, "outcomes.sql")
     outcomesql <- readfile(outcomesfile)
@@ -77,121 +124,88 @@ generateDataFromSql <- function(
         sourceDialect = "sql server",
         targetDialect = connectionDetails$dbms)$sql
 
-    # Helper function to filter out non-sql files.
-    is.sql.file <- function(filename) {
-        return(file_ext(filename) == "sql")
-    }
-    is.sql.file <- Vectorize(is.sql.file)
+    sqllogger$log(cohortsql)
 
+    if (!debug) {
+        cat("Building outcomes.\n")
+        executeSql(conn, outcomesql, progressBar = FALSE,
+                   reportOverallTime = FALSE)
+
+        cat("Downloading outcomes data.\n")
+        outcomes <- downloadOutcomes(conn, connectionDetails$dbms)
+        saveoutcomes(datadir, outcomes)
+    } else {
+        cat("(Debug mode) Building outcomes.\n")
+    }
+
+    # Handle dimensions.
     dimdir <- file.path(sqldir, "dimensions")
     reqdir <- file.path(dimdir, "required")
     optdir <- file.path(dimdir, "optional")
+
     reqfiles <- list.files(reqdir, full.names=TRUE)
     reqfiles <- reqfiles[is.sql.file(reqfiles)]
     optfiles <- list.files(optdir, full.names=TRUE)
     optfiles <- optfiles[is.sql.file(optfiles)]
 
-    dimsqls <- list()
-    required <- list()
-    dimfiles <- c(reqfiles, optfiles)
-    for (dimpath in dimfiles) {
+    presql <- readfile("pre.sql", package = "hdps")
+    postsql <- readfile("post.sql", package = "hdps")
+
+    for (dimpath in c(reqfiles, optfiles)) {
         dimname <- file_path_sans_ext(basename(dimpath))
         dimsql <- readfile(dimpath)
+
+        dimsql <- paste(presql, dimsql, postsql, sep = "\n")
+
         dimsql <- renderSql(sql = dimsql,
-                            cdm_schema = connectionDetails$schema)$sql
+                            cdm_schema = connectionDetails$schema,
+                            topN = topN,
+                            numpersons = numpersons)$sql
+
         dimsql <- translateSql(
             sql = dimsql,
             targetDialect = connectionDetails$dbms)$sql
-        dimsqls[[dimname]] <- dimsql
-        required[[dimname]] <- (dimpath %in% reqfiles)
-    }
 
-    if (debug) {
-        cat("Debug mode: No sql statements will be executed\n")
-        cat("Debug log saved in /tmp/debug.log\n")
+        sqllogger$log(dimsql)
 
-        debuglogger <- Logger$new(filepath = "/tmp/debug.log")
+        if (!debug) {
+            msg <- sprintf("Building dimension: %s\n", dimname)
+            cat(msg)
+            executeSql(conn, dimsql, progressBar = FALSE,
+                       reportOverallTime = FALSE)
 
-        # Model parameters.
-        debuglogger$log(" * * * Cohort details: * * * ")
-        debuglogger$log(string(cohortDetails))
-        debuglogger$log(" * * * Cohort params: * * * ")
-        debuglogger$log(string(cohortparams))
-        debuglogger$log(" * * * Outcome details: * * * ")
-        debuglogger$log(string(outcomeDetails))
-        debuglogger$log(" * * * Outcome params: * * * ")
-        debuglogger$log(string(outcomeparams))
+            cat("Downloading dimension data...\n")
+            dim <- downloaddimension(conn, connectionDetails$dbms)
 
-        # Sql as it would be executed.
-        debuglogger$log(" * * * Cohort sql: * * * ")
-        debuglogger$log(cohortsql)
-        debuglogger$log(" * * * Outcome sql: * * * ")
-        debuglogger$log(outcomesql)
-
-        for (dimname in names(dimsqls)) {
-            title <- sprintf(" * * * %s sql: * * * ", dimname)
-            debuglogger$log(title)
-            debuglogger$log(dimsqls[[dimname]])
+            required <- (dimpath %in% reqfiles)
+            savedimension(datadir, dimname, dim, required)
+        } else {
+            msg <- sprintf("(Debug mode) Building dimension: %s\n", dimname)
+            cat(msg)
         }
-
-        return(NULL)
     }
 
-
-    # TODO: Change connectionDetails to use do.call.
-    conn <- connect(
-        dbms=connectionDetails$dbms,
-        connectionDetails$user,
-        connectionDetails$password,
-        connectionDetails$server,
-        connectionDetails$port,
-        connectionDetails$schema)
-
-    cat("Building cohorts.\n")
-    executeSql(conn, cohortsql, progressBar = FALSE, reportOverallTime = FALSE)
-
-    cat("Downloading cohorts data.\n")
-    cohorts <- downloadcohorts(conn, connectionDetails$dbms)
-    savecohorts(datadir, cohorts)
-
-    cat("Building outcomes.\n")
-    executeSql(conn, outcomesql, progressBar = FALSE, reportOverallTime = FALSE)
-
-    cat("Downloading outcomes data.\n")
-    outcomes <- downloadOutcomes(conn, connectionDetails$dbms)
-    saveoutcomes(datadir, outcomes)
-
-    for (i in 1:length(dimsqls)) {
-        dimname <- names(dimsqls)[i]
-        dimsql <- dimsqls[[dimname]]
-
-        msg <- sprintf("Building dimension: %s\n", dimname)
-        cat(msg)
-        builddimension(conn, dimsql, connectionDetails$dbms)
-
-        cat("Downloading dimension data...\n")
-        dim <- downloaddimension(conn, connectionDetails$dbms, topN)
-        savedimension(datadir, dimname, dim, required[[dimname]])
+    if (!debug) {
+        dummy <- dbDisconnect(conn)
     }
-
-    dummy <- dbDisconnect(conn)
 }
 
 
-builddimension <- function(conn, dimsql, dbms) {
-    sql <- "
-    CREATE TABLE #dim (
-        person_id bigint,
-        covariate_id varchar,
-        covariate_count int)
+downloaddimension <- function(conn, dbms) {
+    sql = "
+    SELECT
+        d.person_id,
+        d.covariate_id,
+        d.covariate_count
+    FROM
+        #dim d INNER JOIN #prevalent_ids p
+            ON d.covariate_id = p.covariate_id
     ;
     "
-    sql <- translateSql(
-        sql = sql,
-        targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
+    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
+    dim <- dbGetQuery(conn, sql)
 
-    executeSql(conn, dimsql, progressBar = FALSE, reportOverallTime = FALSE)
+    dim
 }
 
 
@@ -331,22 +345,6 @@ cleanDataDir <- function(datadir) {
 }
 
 
-addDefaults <- function(details, defaultDetails) {
-    if (is.null(details)) {
-        return(defaultDetails)
-    }
-
-    for (key in names(defaultDetails)) {
-        value <- defaultDetails[[key]]
-        if (is.null(details[[key]])) {
-            details[[key]] = value
-        }
-    }
-
-    details
-}
-
-
 downloadOutcomes <- function(conn, dbms) {
     sql <- "
     SELECT DISTINCT
@@ -386,96 +384,6 @@ downloadcohorts <- function(conn, dbms) {
 savecohorts <- function(datadir, cohorts) {
     filepath <- file.path(datadir, "cohorts.csv")
     write.table(cohorts, file=filepath, sep="\t", row.names=FALSE)
-}
-
-
-downloaddimension <- function(conn, dbms, topN) {
-    # TODO: Probably should just return everything immediately if topN is
-    # NULL to speed up on server computations.
-    if (is.null(topN)) {
-        # Infinity.
-        topN <- 1000000000
-    }
-    # Create prevalence table.
-    sql = "
-    CREATE TABLE #prevalence (
-        covariate_id varchar,
-        person_count int
-    );
-
-    INSERT INTO #prevalence
-    SELECT
-        covariate_id,
-        COUNT(DISTINCT(person_id))
-    FROM
-        #dim
-    GROUP BY
-        covariate_id
-    ;
-    "
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
-
-
-    # TODO: This should probably be called once when building the cohorts.
-    # Get cohort size.
-    sql = "
-    SELECT COUNT(DISTINCT(person_id))
-    FROM cohort_person
-    ;
-    "
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    result <- dbGetQuery(conn, sql)
-    numpersons = result$count
-
-    # Get prevalent ids.
-    sql = "
-    CREATE TABLE #prevalent_ids (
-        covariate_id varchar
-    )
-    ;
-
-    INSERT INTO prevalent_ids
-    SELECT
-        covariate_id
-    FROM prevalence
-    ORDER BY @(person_count/2 - @numpersons)
-    LIMIT @topN
-    ;
-    "
-    sql <- renderSql(sql = sql, numpersons = numpersons, topN = topN)$sql
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
-
-    sql = "
-    SELECT
-        d.person_id,
-        d.covariate_id,
-        d.covariate_count
-    FROM
-        #dim d INNER JOIN #prevalent_ids p
-            ON d.covariate_id = p.covariate_id
-    ;
-    "
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    dim <- dbGetQuery(conn, sql)
-
-    # Clean out temp tables.
-    sql = "
-    TRUNCATE TABLE #dim;
-    DROP TABLE #dim;
-
-    TRUNCATE TABLE #prevalence;
-    DROP TABLE #prevalence;
-
-    TRUNCATE TABLE #prevalent_ids;
-    DROP TABLE #prevalent_ids;
-    ;
-    "
-    sql <- translateSql(sql = sql, targetDialect = dbms)$sql
-    executeSql(conn, sql, progressBar = FALSE, reportOverallTime = FALSE)
-
-    dim
 }
 
 
