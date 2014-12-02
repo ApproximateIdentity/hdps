@@ -8,12 +8,13 @@ basedir <- getwd()
 
 # File where all statistics will be logged.
 logfile <- file.path(basedir, "log")
-logger <- Logger$new(filepath = logfile)
+logger <- Logger$new(logfile)
 
 # Directory containing all input sql.
 sqldir <- file.path(basedir, "sql")
 datadir <- file.path(basedir, "data")
 covariatesdir <- file.path(basedir, "covariates")
+tmpdir <- file.path(basedir, "tmp")
 
 # Login info.
 connectionDetails <- list(
@@ -110,11 +111,12 @@ main <- function(debug = FALSE) {
         cat("Generating data...\n")
 
         generateDataFromSql(
-            sqldir,
-            datadir,
             connectionDetails,
             cohortDetails,
             outcomeDetails,
+            sqldir,
+            datadir,
+            tmpdir = tmpdir,
             topN = 100,
             debug = debug)
 
