@@ -15,7 +15,8 @@ GROUP BY
 INSERT INTO prevalent_ids
 SELECT
     covariate_id
-FROM prevalence
+FROM #prevalence
+WHERE person_count >= @minPatients
 ORDER BY @(person_count/2 - @numpersons)
 LIMIT @topN
 ;

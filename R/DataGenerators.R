@@ -29,15 +29,16 @@ generateDataFromSql <- function(
     tmpdir = NULL,
     topN = 200,
     minPatients = NULL,
-    debug = FALSE) {
-
-    if (!is.null(minPatients)) {
-        cat("Warning: minPatients is not yet implemented\n")
-    }
+    DEBUG = FALSE) {
 
     if (is.null(topN)) {
         # Infinity.
         topN <- 1000000000
+    }
+
+    if (is.null(minPatients)) {
+        # Infinity.
+        minPatients <- 0
     }
 
     if (is.null(tmpdir)) {
@@ -62,7 +63,7 @@ generateDataFromSql <- function(
     }
 
 
-    if (!debug) {
+    if (!DEBUG) {
         # TODO: Change connectionDetails to use do.call.
         conn <- connect(
             dbms=connectionDetails$dbms,
@@ -93,7 +94,7 @@ generateDataFromSql <- function(
 
     sqllogger$log(cohortsql)
 
-    if (!debug) {
+    if (!DEBUG) {
         cat("Building cohorts.\n")
         executeSql(conn, cohortsql, progressBar = FALSE,
                    reportOverallTime = FALSE)
@@ -126,7 +127,7 @@ generateDataFromSql <- function(
 
     sqllogger$log(cohortsql)
 
-    if (!debug) {
+    if (!DEBUG) {
         cat("Building outcomes.\n")
         executeSql(conn, outcomesql, progressBar = FALSE,
                    reportOverallTime = FALSE)
@@ -153,14 +154,22 @@ generateDataFromSql <- function(
 
     for (dimpath in c(reqfiles, optfiles)) {
         dimname <- file_path_sans_ext(basename(dimpath))
+        required <- (dimpath %in% reqfiles)
         dimsql <- readfile(dimpath)
 
         dimsql <- paste(presql, dimsql, postsql, sep = "\n")
 
+        if (required) {
+            thisMinPatients = 0
+        } else {
+            thisMinPatients = minPatients
+        }
+
         dimsql <- renderSql(sql = dimsql,
                             cdm_schema = connectionDetails$schema,
                             topN = topN,
-                            numpersons = numpersons)$sql
+                            numpersons = numpersons,
+                            minPatients = thisMinPatients)$sql
 
         dimsql <- translateSql(
             sql = dimsql,
@@ -168,7 +177,7 @@ generateDataFromSql <- function(
 
         sqllogger$log(dimsql)
 
-        if (!debug) {
+        if (!DEBUG) {
             msg <- sprintf("Building dimension: %s\n", dimname)
             cat(msg)
             executeSql(conn, dimsql, progressBar = FALSE,
@@ -177,7 +186,6 @@ generateDataFromSql <- function(
             cat("Downloading dimension data...\n")
             dim <- downloaddimension(conn, connectionDetails$dbms)
 
-            required <- (dimpath %in% reqfiles)
             savedimension(datadir, dimname, dim, required)
         } else {
             msg <- sprintf("(Debug mode) Building dimension: %s\n", dimname)
@@ -185,7 +193,7 @@ generateDataFromSql <- function(
         }
     }
 
-    if (!debug) {
+    if (!DEBUG) {
         dummy <- dbDisconnect(conn)
     }
 }
