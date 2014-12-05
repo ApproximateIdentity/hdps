@@ -73,9 +73,9 @@ outcomeDetails <- list(
         38000232))
 
 # The function that does the analysis.
-main <- function(debug = FALSE) {
+main <- function(DEBUG = FALSE) {
     #numrows <- nrow(studydata)
-    #debug <- FALSE
+    #DEBUG <- FALSE
     i <- 1
     numrows <- 1
     timer <- Timer$new()
@@ -118,13 +118,14 @@ main <- function(debug = FALSE) {
             datadir,
             tmpdir = tmpdir,
             topN = 100,
-            debug = debug)
+            minPatients = 50,
+            DEBUG = DEBUG)
 
         # REMOVE
-        return()
+        #return()
 
         # For debug reasons.
-        if (debug) {
+        if (DEBUG) {
             next
         }
 
@@ -135,7 +136,7 @@ main <- function(debug = FALSE) {
                                    topK = 300)
 
         # REMOVE
-        return()
+        #return()
         # Run Cyclops
         sparseData <- getSparseData(covariatesdir)
 
@@ -143,19 +144,22 @@ main <- function(debug = FALSE) {
         cyclopsData <- createCyclopsDataFrame(y = sparseData$y,
                                               sx = sparseData$X,
                                               modelType = "pr")
-        cyclopsFit <- fitCyclopsModel(cyclopsData, prior = prior("laplace"))
+        cyclopsFit <- fitCyclopsModel(
+            cyclopsData,
+            prior = createPrior("laplace"))
         pred <- predict(cyclopsFit)
 
         propdata <- data.frame(
-            TREATMENT = sparseData$y,
-            PROPENSITY_SCORE = pred)
+            treatment = sparseData$y,
+            propensityScore = pred)
 
         logger$log(sprintf("Number of patients: %s", sparseData$numpersons))
         logger$log(sprintf("Number of covariates: %s\n",
                            sparseData$numcovariates))
 
-        auc <- psAuc(propdata)
-        logger$log(string(auc))
+        auc <- string(computePsAuc(propdata))
+        cat(sprintf("%s\n", auc))
+        logger$log(auc)
 
         elapsedtime <- sprintf("Elapsed time in run: %s\n", timer$split())
         cat(elapsedtime)
@@ -202,4 +206,4 @@ getSparseData <- function(covariatesdir) {
 }
 
 
-main(debug = FALSE)
+main(DEBUG = FALSE)
