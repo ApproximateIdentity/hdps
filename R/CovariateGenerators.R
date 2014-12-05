@@ -279,6 +279,11 @@ convertCovariates <- function(datadir, covariatesdir, tmpdir, pidMap, topN) {
                                  old_covariate_id="character",
                                  old_covariate_value="numeric"))
 
+        # In case there are no covariates in the dimension.
+        if (nrow(covariates) == 0) {
+            next
+        }
+
         covariates <- merge(pidMap, covariates)
         covariates <- covariates[, c('new_person_id', 'old_covariate_id',
                                      'old_covariate_value')]
