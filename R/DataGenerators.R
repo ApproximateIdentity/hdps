@@ -44,9 +44,10 @@ generateDataFromSql <- function(
     if (is.null(tmpdir)) {
         tmpdir <- tempdir()
     } else {
-        # Clean out any old files.
-        unlink(tmpdir, recursive = TRUE)
-        dir.create(tmpdir)
+        # Clean out any old files, but do not unlink original directory.
+        for (path in list.files(tmpdir, full.names = TRUE)) {
+            unlink(path, recursive = TRUE)
+        }
     }
 
     # Clean out any old data in datadir and rebuild necessary directories.
@@ -291,11 +292,6 @@ generateSimulatedDims <- function(outdir, pids, numdims) {
 validSqlStructure <- function(sqldir) {
     if (!file.exists(sqldir) || !(file.info(sqldir)$isdir)) {
         msg <- sprintf("Error: Directory %s does not exist.\n", sqldir)
-        cat(msg)
-        return(FALSE)
-    }
-    if (!file.exists(datadir) || !(file.info(datadir)$isdir)) {
-        msg <- sprintf("Error: Directory %s does not exist.\n", datadir)
         cat(msg)
         return(FALSE)
     }

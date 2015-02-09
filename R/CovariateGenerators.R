@@ -262,7 +262,10 @@ convertCovariates <- function(datadir, covariatesdir, tmpdir, pidMap, topN) {
         close(outfile)
     }
 
-    newbasecovid <- 1
+    # Cohort Method assumes at one point that the covariate id 1 corresponds to
+    # treatment and then drops it. By arbitrarily starting our covariate ids at
+    # 2, we avoid this problem.
+    newbasecovid <- 2
     for (infilepath in c(reqinpaths, optinpaths)) {
         dimname <- file_path_sans_ext(basename(infilepath))
         required <- (infilepath %in% reqinpaths)

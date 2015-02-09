@@ -1,2 +1,2 @@
 exportPattern("^[^\\.]")
-
+S3method(summary, hdpsData)
