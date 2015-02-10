@@ -90,11 +90,6 @@ getDbHdpsData <- function(
     names(cohorts)[names(cohorts) == "new_person_id"] <- "personId"
     cohorts$rowId <- cohorts$personId
 
-    cohortMap <- read.table(
-        file.path(covariatesdir, "cohortMap.csv"),
-        header = TRUE,
-        sep = '\t')
-
     covariates <- read.table(
         file.path(covariatesdir, "covariates.csv"),
         header = TRUE,
@@ -113,11 +108,6 @@ getDbHdpsData <- function(
         header = TRUE,
         sep = '\t')
 
-    outcomes <- read.table(
-        file.path(covariatesdir, "outcomes.csv"),
-        header = TRUE,
-        sep = '\t')
-
     covariateRef <- data.frame(
         covariateId = covariateMap$new_covariate_id,
         covariateName = paste(
@@ -133,10 +123,7 @@ getDbHdpsData <- function(
     # Read in data from covariatesdir.
     hdpsData <- list(
         cohorts = ff::as.ffdf(cohorts),
-        cohortMap = ff::as.ffdf(cohortMap),
         covariates = ff::as.ffdf(covariates),
-        covariateMap = ff::as.ffdf(covariateMap),
-        outcomes = ff::as.ffdf(outcomes),
         covariateRef = ff::as.ffdf(covariateRef))
     class(hdpsData) <- "hdpsData"
 
