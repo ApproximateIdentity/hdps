@@ -91,7 +91,7 @@ prioritizeOptCovariates <- function(covariatesdir, tmpdir) {
                            colClasses = c(new_person_id="numeric",
                            outcome_id="numeric"))
 
-    # Outcomes is in a spare format so fill in missing outcomes with 0s.
+    # Outcomes is in a sparse format so fill in missing outcomes with 0s.
     outcomes <- merge(outcomes, cohorts['new_person_id'], all = TRUE)
     outcomes[is.na(outcomes)] <- 0
 
@@ -129,6 +129,7 @@ prioritizeOptCovariates <- function(covariatesdir, tmpdir) {
     # Step 3: For each covariate find number of persons with that covariate and
     # outcome equal to 1.
     personswithoutcome <- outcomes[outcomes$outcome_id == 1,]
+    # Drop outcome_id.
     personswithoutcome <- data.frame(
         new_person_id = personswithoutcome$new_person_id)
 
@@ -170,9 +171,16 @@ prioritizeOptCovariates <- function(covariatesdir, tmpdir) {
     covariates <- merge(covariates, cohorts)
     mask <- covariates$outcome_id == 1
     covariates <- covariates[mask,]
-    PC1 <- aggregate(new_person_id ~ new_covariate_id,
-                     covariates,
-                     length)
+
+    # The previous line could very well set covariates to an empty data frame
+    # on which we cannot apply aggregate so we handle that case separately.
+    if (nrow(covariates) == 0) {
+        PC1 <- data.frame(new_covariate_id=integer(), new_person_id=integer())
+    } else {
+        PC1 <- aggregate(new_person_id ~ new_covariate_id,
+                         covariates,
+                         length)
+    }
     PC1 <- setNames(PC1, c("new_covariate_id", "PC1"))
 
     priority <- merge(priority, PC1, all = TRUE)
