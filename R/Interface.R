@@ -108,24 +108,42 @@ getDbHdpsData <- function(
         header = TRUE,
         sep = '\t')
 
-    covariateRef <- data.frame(
-        covariateId = covariateMap$new_covariate_id,
-        covariateName = paste(
-            "Dimension name: ",
-            covariateMap$dim_name,
-            ", Old covariate id: ",
-            covariateMap$old_covariate_id,
-            ", Level: ",
-            covariateMap$level,
-            sep = "")
-    )
+    if (nrow(covariateMap) > 0) {
+        covariateRef <- data.frame(
+            covariateId = covariateMap$new_covariate_id,
+            covariateName = paste(
+                "Dimension name: ",
+                covariateMap$dim_name,
+                ", Old covariate id: ",
+                covariateMap$old_covariate_id,
+                ", Level: ",
+                covariateMap$level,
+                sep = ""))
+    } else {
+        # Handle case where there are no covariates.
+        covariateRef <- data.frame(
+            covariateId = integer(),
+            covariateName = character())
+    }
 
-    # Read in data from covariatesdir.
+    # Put data into form Cohort Method expects.
     hdpsData <- list(
-        cohorts = ff::as.ffdf(cohorts),
-        covariates = ff::as.ffdf(covariates),
-        covariateRef = ff::as.ffdf(covariateRef))
+        cohorts = makeffdf(cohorts),
+        covariates = makeffdf(covariates),
+        covariateRef = makeffdf(covariateRef))
     class(hdpsData) <- "hdpsData"
 
     hdpsData
+}
+
+# Handle bug in ff in which ff::as.ffdf does not work on a data.frame with no
+# rows.
+makeffdf <- function(df) {
+    if (nrow(df) == 0) {
+        df <- ff::as.ffdf(df[NA,])
+        nrow(df) <- 0
+        return(df)
+    } else {
+        return(ff::as.ffdf(df))
+    }
 }

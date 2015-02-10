@@ -226,7 +226,12 @@ convertCohorts <- function(datadir, covariatesdir) {
                           colClasses = c(old_person_id="character",
                           cohort_id="numeric"))
 
-    cohorts$new_person_id <- 1:length(cohorts$old_person_id)
+    # Handle case where cohorts is empty.
+    if (nrow(cohorts) > 0) {
+        cohorts$new_person_id <- 1:length(cohorts$old_person_id)
+    } else {
+        cohorts$new_person_id <- integer()
+    }
 
     pidMap <- cohorts[, c('new_person_id', 'old_person_id')]
     outfilepath <- file.path(covariatesdir, "cohortMap.csv")
