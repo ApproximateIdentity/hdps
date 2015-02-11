@@ -82,8 +82,12 @@ generateDataFromSql <- function(
 
     cohortparams <- c(
         list(sql = cohortsql,
-             cdm_schema = connectionDetails$schema,
-             results_schema = connectionDetails$schema),
+            cdm_database_schema = connectionDetails$schema,
+            results_database_schema = connectionDetails$schema,
+            cdm_database = connectionDetails$schema,
+            results_database = connectionDetails$schema,
+            exposure_table = "drug_era",
+            exposure_schema = connectionDetails$schema),
         cohortDetails)
 
     cohortsql <- do.call(renderSql, cohortparams)$sql
