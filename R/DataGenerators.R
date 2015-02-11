@@ -27,8 +27,8 @@ generateDataFromSql <- function(
     sqldir,
     datadir,
     tmpdir = NULL,
-    topN = 200,
-    minPatients = NULL,
+    topN = 100,
+    minPatients = 100,
     DEBUG = FALSE) {
 
     if (is.null(topN)) {

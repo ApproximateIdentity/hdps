@@ -44,7 +44,10 @@ getDbHdpsData <- function(
     targetDrugConceptId,
     comparatorDrugConceptId,
     indicationConceptIds = c(),
-    outcomeConceptIds = lowBackPain) {
+    outcomeConceptIds = lowBackPain,
+    topN = 100,
+    topK = 500,
+    minPatients = 100) {
 
     # Load in the sql files.
     sqldir <- system.file("sql", package = "hdps")
@@ -73,14 +76,14 @@ getDbHdpsData <- function(
         sqldir,
         datadir,
         tmpdir = tmpdir,
-        topN = 100,
-        minPatients = 50)
+        topN = topN,
+        minPatients = minPatients)
 
     generateCovariatesFromData(
         datadir,
         covariatesdir,
-        topN = 100,
-        topK = 300)
+        topN = topN,
+        topK = topK)
 
     cohorts <- read.table(
         file.path(covariatesdir, "cohorts.csv"),
