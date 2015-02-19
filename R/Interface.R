@@ -45,13 +45,14 @@ getDbHdpsData <- function(
     comparatorDrugConceptId,
     indicationConceptIds = c(),
     outcomeConceptIds = lowBackPain,
-    topN = 100,
-    topK = 500,
+    topN = 200,
+    topKs = 500,
     minPatients = 100) {
 
     # Load in the sql files.
     sqldir <- system.file("sql", package = "hdps")
     basedir <- file.path(getwd(), "hdpsdata")
+    dir.create(basedir, showWarnings = FALSE)
     for (path in list.files(basedir, full.names = TRUE)) {
         unlink(path, recursive = TRUE)
     }
@@ -79,12 +80,25 @@ getDbHdpsData <- function(
         topN = topN,
         minPatients = minPatients)
 
-    generateCovariatesFromData(
-        datadir,
-        covariatesdir,
-        topN = topN,
-        topK = topK)
+    hdpsResults <- new.env()
 
+    for (topK in topKs) {
+        generateCovariatesFromData(
+            datadir,
+            covariatesdir,
+            topN = topN,
+            topK = topK)
+
+        hdpsData <- extractHdpsData(covariatesdir)
+
+        assign(toString(topK), hdpsData, envir = hdpsResults)
+    }
+
+    hdpsResults
+}
+
+
+extractHdpsData <- function(covariatesdir) {
     cohorts <- read.table(
         file.path(covariatesdir, "cohorts.csv"),
         header = TRUE,
@@ -92,6 +106,11 @@ getDbHdpsData <- function(
     names(cohorts)[names(cohorts) == "cohort_id"] <- "treatment"
     names(cohorts)[names(cohorts) == "new_person_id"] <- "personId"
     cohorts$rowId <- cohorts$personId
+
+    cohortMap <- read.table(
+        file.path(covariatesdir, "cohortMap.csv"),
+        header = TRUE,
+        sep = '\t')
 
     covariates <- read.table(
         file.path(covariatesdir, "covariates.csv"),
@@ -132,6 +151,7 @@ getDbHdpsData <- function(
     # Put data into form Cohort Method expects.
     hdpsData <- list(
         cohorts = makeffdf(cohorts),
+        cohortMap = makeffdf(cohortMap),
         covariates = makeffdf(covariates),
         covariateRef = makeffdf(covariateRef))
     class(hdpsData) <- "hdpsData"
