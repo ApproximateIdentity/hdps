@@ -46,7 +46,7 @@ getDbHdpsData <- function(
     indicationConceptIds = c(),
     outcomeConceptIds = lowBackPain,
     topN = 200,
-    topKs = 500,
+    topK = 500,
     minPatients = 100) {
 
     # Load in the sql files.
@@ -82,19 +82,15 @@ getDbHdpsData <- function(
 
     hdpsResults <- new.env()
 
-    for (topK in topKs) {
-        generateCovariatesFromData(
-            datadir,
-            covariatesdir,
-            topN = topN,
-            topK = topK)
+	generateCovariatesFromData(
+		datadir,
+		covariatesdir,
+		topN = topN,
+		topK = topK)
 
-        hdpsData <- extractHdpsData(covariatesdir)
+	hdpsData <- extractHdpsData(covariatesdir)
 
-        assign(toString(topK), hdpsData, envir = hdpsResults)
-    }
-
-    hdpsResults
+    hdpsData
 }
 
 
